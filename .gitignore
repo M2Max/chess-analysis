@@ -1,0 +1,10 @@
+node_modules/
+dist/
+public/stockfish-lite/
+public/stockfish-full/
+public/openings.json
+.DS_Store
+*.local
+.env
+node_modules/.tmp/
+data/

@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+/*
+ * Theme tokens. Dark is the default (the original look); the light theme is
+ * a warm paper palette. Components only use the semantic utilities below
+ * (bg-app, bg-card, text-ink, ...), never hardcoded neutral/emerald shades,
+ * so both themes stay coherent. Switching = data-theme on <html> (settings).
+ */
+@theme inline {
+  --color-app: var(--app);
+  --color-card: var(--card);
+  --color-card-solid: var(--card-solid);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-mute: var(--ink-mute);
+  --color-ink-faint: var(--ink-faint);
+  --color-btn: var(--btn);
+  --color-btn-hover: var(--btn-hover);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-strong-hover: var(--accent-strong-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-text: var(--accent-soft-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-border: var(--warn-border);
+  --color-warn-text: var(--warn-text);
+  --color-sel: var(--sel);
+  --color-sel-text: var(--sel-text);
+  --color-sel-ring: var(--sel-ring);
+  --color-branch: var(--branch);
+  --color-score: var(--score);
+}
+
+:root {
+  color-scheme: dark;
+  /* surface */
+  --app: #312e2b;
+  --card: rgba(38, 37, 36, 0.6);
+  --card-solid: #1a1918;
+  --line: rgba(255, 255, 255, 0.05);
+  --line-strong: rgba(255, 255, 255, 0.12);
+  /* text */
+  --ink: #f5f5f4;
+  --ink-soft: #d6d3d1;
+  --ink-mute: #a8a29e;
+  --ink-faint: #78716c;
+  /* controls */
+  --btn: rgba(64, 61, 58, 0.6);
+  --btn-hover: #44403c;
+  --score: #262626;
+  /* brand accent */
+  --accent: #34d399;
+  --accent-strong: #059669;
+  --accent-strong-hover: #10b981;
+  --accent-soft: rgba(16, 185, 129, 0.12);
+  --accent-soft-text: #6ee7b7;
+  /* feedback */
+  --danger: #fca5a5;
+  --danger-soft: rgba(239, 68, 68, 0.1);
+  /* warning banners (stats page) */
+  --warn: rgba(245, 158, 11, 0.1);
+  --warn-border: rgba(245, 158, 11, 0.3);
+  --warn-text: #fde68a;
+  /* selected move (move list) */
+  --sel: rgba(14, 165, 233, 0.25);
+  --sel-text: #e0f2fe;
+  --sel-ring: rgba(14, 165, 233, 0.5);
+  /* off-mainline branch marker */
+  --branch: #f0abfc;
+  /* move classification colours (text) */
+  --cat-brilliant: #3b82f6;
+  --cat-best: #34d399;
+  --cat-great: #38bdf8;
+  --cat-good: #6ee7b7;
+  --cat-opening: #d97706;
+  --cat-inaccuracy: #facc15;
+  --cat-mistake: #fb923c;
+  --cat-blunder: #f87171;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --app: #f4f1ea;
+  --card: rgba(255, 255, 255, 0.8);
+  --card-solid: #ffffff;
+  --line: rgba(41, 37, 36, 0.08);
+  --line-strong: rgba(41, 37, 36, 0.16);
+  --ink: #292524;
+  --ink-soft: #44403c;
+  --ink-mute: #57534e;
+  --ink-faint: #78716c;
+  --btn: rgba(41, 37, 36, 0.06);
+  --btn-hover: rgba(41, 37, 36, 0.12);
+  --score: #ffffff;
+  --accent: #047857;
+  --accent-strong: #059669;
+  --accent-strong-hover: #047857;
+  --accent-soft: rgba(5, 150, 105, 0.08);
+  --accent-soft-text: #047857;
+  --danger: #b91c1c;
+  --danger-soft: rgba(239, 68, 68, 0.08);
+  --warn: rgba(217, 119, 6, 0.1);
+  --warn-border: rgba(217, 119, 6, 0.35);
+  --warn-text: #92400e;
+  --sel: rgba(2, 132, 199, 0.15);
+  --sel-text: #0c4a6e;
+  --sel-ring: rgba(2, 132, 199, 0.4);
+  --branch: #a21caf;
+  --cat-brilliant: #1d4ed8;
+  --cat-best: #047857;
+  --cat-great: #0369a1;
+  --cat-good: #059669;
+  --cat-opening: #92400e;
+  --cat-inaccuracy: #a16207;
+  --cat-mistake: #c2410c;
+  --cat-blunder: #b91c1c;
+}
+
+/* semantic move-category colours (see categoryColorClass in classify.ts) */
+.cat-brilliant { color: var(--cat-brilliant); }
+.cat-best, .cat-excellent { color: var(--cat-best); }
+.cat-great { color: var(--cat-great); }
+.cat-good { color: var(--cat-good); }
+.cat-opening { color: var(--cat-opening); }
+.cat-inaccuracy { color: var(--cat-inaccuracy); }
+.cat-mistake { color: var(--cat-mistake); }
+.cat-blunder, .cat-missedwin { color: var(--cat-blunder); }

@@ -1,0 +1,41 @@
+# Image registry, overridable per deployment:
+#   GHCR (default):  docker login ghcr.io  (PAT with packages:read), then
+#                    docker compose up -d
+#   Self-hosted LAN registry (e.g. Gitea):
+#                    REGISTRY=<host:port>/<user> docker compose up -d
+#  (an HTTP-only LAN registry must be listed in /etc/docker/daemon.json
+#   insecure-registries - see scripts/truenas-insecure-registry.sh)
+services:
+  chess-analysis:
+    image: ${REGISTRY:-ghcr.io/m2max/chess-analysis}:${TAG:-latest}
+    container_name: chess-analysis
+    restart: unless-stopped
+    ports:
+      # Host port : Container port - adjust as needed
+      - "35102:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # HTTPS with the self-signed cert mounted below. REQUIRED for the
+      # multi-threaded Stockfish: SharedArrayBuffer only works in secure
+      # contexts, and a bare IP address is only "secure" over https
+      # (http://localhost is the only exception). Without HTTPS the app
+      # still works but silently falls back to single-threaded.
+      - HTTPS=true
+      - SSL_KEY=/app/certs/key.pem
+      - SSL_CERT=/app/certs/cert.pem
+    volumes:
+      # ./certs on the TrueNAS host — see README "Generate the certificate".
+      - ./certs:/app/certs:ro
+      # SQLite database (per-player games + analyses) — persists across
+      # image updates. Back it up by copying this directory (see README).
+      - ./data:/app/data
+    healthcheck:
+      # Bun fetch trusting the self-signed cert as its own CA. BusyBox wget
+      # (what node:alpine ships) cannot skip certificate verification, and
+      # the cert must carry the SAN DNS:localhost for the hostname check.
+      test: ["CMD", "bun", "-e", "const{readFileSync}=require('fs');const ca=readFileSync(process.env.SSL_CERT||'/app/certs/cert.pem','utf8');fetch('https://localhost:3000/',{tls:{ca}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

@@ -1,0 +1,42 @@
+{
+  "name": "chess-analysis",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "postinstall": "bun scripts/fetch-engine.ts && bun scripts/fetch-openings.ts",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "start": "bun server/index.ts",
+    "fetch:engine": "bun scripts/fetch-engine.ts",
+    "fetch:openings": "bun scripts/fetch-openings.ts",
+    "test": "bun test",
+    "docker:build": "docker build --platform linux/amd64 -t chess-analysis:latest .",
+    "docker:run": "docker run -p 35102:3000 chess-analysis:latest",
+    "docker:tag": "docker tag chess-analysis:latest ${REGISTRY}/chess-analysis:latest",
+    "docker:push": "docker push ${REGISTRY}/chess-analysis:latest"
+  },
+  "engines": {
+    "node": ">=24",
+    "bun": ">=1.1"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "react": "^19.2.8",
+    "react-chessboard": "^5.12.1",
+    "react-dom": "^19.2.8",
+    "stockfish": "^18.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "bun-types": "^1.4.0",
+    "playwright-core": "^1.62.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}
