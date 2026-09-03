@@ -46,17 +46,17 @@ stats aggregation; integration: server HTTP layer with stubbed upstream,
 SQLite suite against a throwaway DB; browser e2e scripts available).
 `tsc -b` clean.
 
-### 6. Dependabot + branch protection — PARTIAL
-- **Dependabot**: `.github/dependabot.yml` added (npm ecosystem / `bun.lock`,
-  weekly, `dependencies` label). First PRs appear next Monday.
-- **Branch protection**: **blocked on the Free plan while the repo is
-  private** (both classic protection and rulesets returned 403 "Upgrade to
-  Pro or make this repository public"). Once you make the repo public:
-  Settings → Branches → Add rule on `main`:
-  - Require status check to pass before merging: `build` (the docker job)
-  - Do not allow force pushes / deletions
-  (Optionally "Require pull request reviews" - meaningless for a solo repo.)
-  Or I can create the ruleset via API after you flip public.
+### 6. Dependabot + branch protection — DONE (repo now public)
+- **Dependabot**: `.github/dependabot.yml` in place (npm ecosystem /
+  `bun.lock`, weekly, `dependencies` label). Active since the repo went
+  public; first update PRs arrive within the weekly window.
+- **Branch protection on `main`** (created via API after going public):
+  - classic protection: require status check **`build`** (the docker job)
+    to pass before merging; admins not enforced
+  - ruleset `main-integrity` [active]: **no branch deletion**, **no
+    non-fast-forward (force) pushes**
+- **Secret scanning**: enabled (GitHub scans pushes; alerts on any
+  accidentally committed token/key).
 
 ### 7. Full build/deploy in a clean environment — DONE (bug found & fixed)
 - `docker build --no-cache` (linux/amd64): image verified (230 MB dist,
@@ -93,19 +93,19 @@ Plus the earlier `SECURITY-AUDIT.md` (secret scan, hardening, audit).
   conflicts. **AGPL** only makes sense if you plan to offer this as a hosted
   service - it doesn't for a client-side app.
 
-## Manual steps left for you (publish day)
+## Manual steps left for you
 
-1. `gh auth` as M2Max → repo Settings → **Danger Zone → Change visibility
-   → Public** (or make it public and keep the Gitea copy private - they are
-   independent).
-2. After public: enable the branch protection rule (item 6 steps) - or ask
-   me and I'll create it via API.
+1. ✅ Repo made public (done by the agent on your request, 2026-09-03)
+2. ✅ Branch protection + ruleset + Dependabot + secret scanning (done)
 3. TrueNAS pull needs a **fine-grained PAT** (repo `chess-analysis`,
    Packages: Read-only) for `docker login ghcr.io` - OAuth tokens can't pull
    from GHCR.
 4. Optional: rename copyright holder in `LICENSE` to your real name.
 5. Optional: first version tag `v1.0.0` - Actions will publish
    `ghcr.io/m2max/chess-analysis:v1.0.0` alongside `latest`.
+6. Note: the Gitea copy (`origin`) still has the **full history** with LAN
+   details (IPs, registry user). It stays on your LAN - never push it
+   anywhere else; the GitHub history is the clean snapshot + new commits.
 
 ## Known residuals (accepted, documented)
 
@@ -113,5 +113,5 @@ Plus the earlier `SECURITY-AUDIT.md` (secret scan, hardening, audit).
 - No rate limiting (LAN exposure only)
 - Vite dev server binds to the LAN (dev workflow, never in the image)
 - 32-bit Raspberry Pi (RPi 3/Zero) not supported - Bun has no arm/v7 builds
-- Dependabot PRs will need the `build` check green; with no branch
-  protection yet, merges are unrestricted until step 2 above
+- Direct pushes to `main` bypass the `build` merge check (solo workflow);
+  PRs (e.g. Dependabot) must have `build` green
