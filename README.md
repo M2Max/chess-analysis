@@ -338,3 +338,23 @@ retrieved games and analyses survive updates.
 > certificate verification, so the compose healthcheck uses the image's
 > `bun` to `fetch()` the site trusting the self-signed cert as its own CA.
 > That's why the cert needs the `DNS:localhost` SAN.
+
+## License
+
+The application code in this repository is licensed under the **MIT License**
+(see [LICENSE](./LICENSE)).
+
+Third-party components keep their own licenses:
+
+- **Stockfish** engine (the `stockfish` npm package / WASM builds copied into
+  `public/stockfish-*/` at build time) is **GPL-3.0**. It ships as a separate
+  engine binary that the app drives over the standard UCI protocol in a Web
+  Worker - it is a distinct program, not linked into this codebase, so the
+  MIT-licensed app code is not a derivative work. The engine is re-fetched from
+  the npm package on every build; the GPL terms apply to that component.
+- **Staunty chess pieces** (Lichess, `src/assets/pieces/`) are **CC0**.
+- **Opening names** (Lichess `chess-openings` dataset, CC0) are compiled at
+  build time into `public/openings.json`.
+- **chess.js** is **BSD-2-Clause**; React, react-dom, react-chessboard,
+  Tailwind and the rest of the toolchain are MIT (see `bun.lock` / package
+  metadata for the full set).

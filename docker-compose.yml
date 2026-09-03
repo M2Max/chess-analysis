@@ -7,7 +7,9 @@
 #   insecure-registries - see scripts/truenas-insecure-registry.sh)
 services:
   chess-analysis:
-    image: ${REGISTRY:-ghcr.io/m2max/chess-analysis}:${TAG:-latest}
+    # REGISTRY = registry host + namespace (no repo name); defaults to GHCR.
+    # Self-hosted example: REGISTRY=<host:port>/<user>
+    image: ${REGISTRY:-ghcr.io/m2max}/chess-analysis:${TAG:-latest}
     container_name: chess-analysis
     restart: unless-stopped
     ports:

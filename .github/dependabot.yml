@@ -1,0 +1,12 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # bun.lock is the text lockfile the npm ecosystem understands;
+    # the binary bun.lockb (if present) is ignored.
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
