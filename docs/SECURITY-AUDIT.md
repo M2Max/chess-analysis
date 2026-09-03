@@ -97,14 +97,15 @@ image: ${REGISTRY:-ghcr.io/<GITHUB_USER>}/chess-analysis:${TAG:-latest}
 (account confirmed: `M2Max`). Pipeline:
 
 - Triggers: push to `main`, git tags, manual `workflow_dispatch`
-- `docker/setup-buildx` + `docker/setup-qemu-action` (cross-compile)
-- Platforms: `linux/amd64`, `linux/arm64` (RPi 4/5, ARMv8 servers),
-  `linux/arm/v7` (32-bit Raspberry Pi 3/Zero)
-- Tags: `latest` + commit SHA + tag name when publishing a release
+- Platforms: `linux/amd64` + `linux/arm64` (RPi 4/5, ARMv8). Each is built
+  natively on a matching runner (`ubuntu-latest` / `linux-arm64`): QEMU
+  user-mode emulation crashes on the Bun binary, so no cross-compilation.
+  `linux/arm/v7` (RPi 3/Zero 32-bit) is not supported: Bun ships no
+  32-bit ARM binaries (verified: `EBADPLATFORM`, cpu arm64/x64 only).
+- Tags: `latest`, `sha-<commit>`, version tag (per-platform intermediates
+  `*-amd64`/`*-arm64`, then a multi-arch manifest via
+  `buildx imagetools`)
 - Push to `ghcr.io` with the built-in `GITHUB_TOKEN` (no secret needed for
-  the same repo; package must exist or the workflow creates it)
-- Idempotent: rebuilds are cache-friendly; failures abort before push
-  (buildx pushes only on success)
-
-Note: the Stockfish assets are architecture-independent WASM, so all three
-platforms share the same app layers; only the Bun/Node base images differ.
+  the same repo; the package is created on first push)
+- Idempotent: GHA build cache; the manifest job runs only when both
+  platform builds succeeded, so a failure never publishes a partial image

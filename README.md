@@ -243,11 +243,14 @@ copy the `./data/` folder. Restore = put the files back. `review.db`,
 - **GitHub Container Registry (default):** images are built automatically
   by GitHub Actions on every push to `main` (see
   [`.github/workflows/docker.yml`](./.github/workflows/docker.yml)) for
-  `linux/amd64`, `linux/arm64` (RPi 4/5, ARMv8) and `linux/arm/v7` (32-bit
-  RPi 3/Zero), and published as `ghcr.io/<owner>/chess-analysis` with tags
-  `latest`, `sha-<commit>` and the version tag.
+  `linux/amd64` (TrueNAS Scale, x86_64 servers) and `linux/arm64`
+  (Raspberry Pi 4/5, ARMv8), assembled into a multi-arch manifest and
+  published as `ghcr.io/<owner>/chess-analysis` with tags `latest`,
+  `sha-<commit>` and the version tag.
   Pull: `docker login ghcr.io` (token with `packages: read`), then
   `docker compose up -d`.
+  (32-bit Raspberry Pi 3 / Zero are not supported: the Bun runtime has no
+  `arm/v7` builds.)
 - **Self-hosted registry (e.g. Gitea on the LAN):** build locally and push:
 
 ```bash
