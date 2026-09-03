@@ -11,7 +11,8 @@ name: docker
 # binaries (npm platform check: cpu arm64,x64 only).
 #
 # Each platform is built natively on a matching runner (no QEMU
-# cross-emulation: emulated Bun binaries crash under QEMU user mode).
+# cross-emulation: emulated Bun binaries crash under QEMU user mode):
+#   linux/amd64 -> ubuntu-latest (x64), linux/arm64 -> ubuntu-24.04-arm.
 # The final multi-arch manifest is assembled only after both platform
 # images are pushed, so a failed build never publishes a partial image.
 
@@ -40,7 +41,7 @@ jobs:
       matrix:
         include:
           - { platform: linux/amd64, runs-on: ubuntu-latest, suffix: amd64 }
-          - { platform: linux/arm64, runs-on: linux-arm64, suffix: arm64 }
+          - { platform: linux/arm64, runs-on: ubuntu-24.04-arm, suffix: arm64 }
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout

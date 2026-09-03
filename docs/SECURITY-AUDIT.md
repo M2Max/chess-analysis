@@ -98,7 +98,8 @@ image: ${REGISTRY:-ghcr.io/<GITHUB_USER>}/chess-analysis:${TAG:-latest}
 
 - Triggers: push to `main`, git tags, manual `workflow_dispatch`
 - Platforms: `linux/amd64` + `linux/arm64` (RPi 4/5, ARMv8). Each is built
-  natively on a matching runner (`ubuntu-latest` / `linux-arm64`): QEMU
+  natively on a matching runner (`ubuntu-latest` / `ubuntu-24.04-arm`):
+  QEMU
   user-mode emulation crashes on the Bun binary, so no cross-compilation.
   `linux/arm/v7` (RPi 3/Zero 32-bit) is not supported: Bun ships no
   32-bit ARM binaries (verified: `EBADPLATFORM`, cpu arm64/x64 only).
