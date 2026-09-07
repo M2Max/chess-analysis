@@ -16,7 +16,9 @@ interface Props {
  */
 export function EvalBar({ score, sideToMove, flipped = false }: Props) {
   const pct = evalWhitePct(score, sideToMove);
-  const label = formatEval(score, sideToMove);
+  // sign omitted: position + colour carry it (bottom/white = White better,
+  // top/black = Black better), chess.com-style - keeps the text narrow
+  const label = formatEval(score, sideToMove).replace(/^[+−-]/, "");
   const whiteLeads = pct >= 50;
   // White's section is anchored at the bottom (or at the top when flipped);
   // it is >= 50% tall when White leads, so a small inset is always inside it.
@@ -26,7 +28,7 @@ export function EvalBar({ score, sideToMove, flipped = false }: Props) {
 
   return (
     <div
-      className="relative w-4 shrink-0 self-stretch overflow-hidden rounded-sm bg-neutral-950 ring-1 ring-neutral-600"
+      className="relative w-5 shrink-0 self-stretch overflow-hidden rounded-sm bg-neutral-950 ring-1 ring-neutral-600"
       aria-hidden
     >
       {/* White's share */}
@@ -37,7 +39,7 @@ export function EvalBar({ score, sideToMove, flipped = false }: Props) {
       <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-neutral-500/60" />
       {/* evaluation number, inside the dominant colour, contrasting text */}
       <div
-        className={`pointer-events-none absolute inset-x-0 text-center text-[10px] font-bold leading-none tabular-nums ${
+        className={`pointer-events-none absolute inset-x-0 text-center text-[9px] font-bold leading-none tabular-nums ${
           whiteLeads ? "text-neutral-900" : "text-neutral-100"
         }`}
         style={labelStyle}

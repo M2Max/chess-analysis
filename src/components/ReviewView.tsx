@@ -528,7 +528,7 @@ export function ReviewView({
               )}
             </div>
             {/* mirrors the eval bar so the board stays optically centered */}
-            <div className="w-4 shrink-0" aria-hidden />
+            <div className="w-5 shrink-0" aria-hidden />
           </div>
 
           {/* nav row - history nav is desktop-only (on mobile the move
