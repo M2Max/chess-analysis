@@ -26,7 +26,7 @@ export function EvalBar({ score, sideToMove, flipped = false }: Props) {
 
   return (
     <div
-      className="relative h-full w-4 shrink-0 overflow-hidden rounded-sm bg-neutral-950 ring-1 ring-neutral-600"
+      className="relative w-4 shrink-0 self-stretch overflow-hidden rounded-sm bg-neutral-950 ring-1 ring-neutral-600"
       aria-hidden
     >
       {/* White's share */}

@@ -138,6 +138,8 @@ test fixture.
 - The Bun server does NOT hot-reload; restart it after touching `server/`.
 - `translate()` throws on unknown keys - see i18n standard above.
 - `useCallback` deps arrays evaluate immediately: declare consts above.
+- `h-full` (height:100%) on a flex item in an auto-height flex row computes
+  to 0 - use `self-stretch` (EvalBar was invisible for this reason).
 - macOS lacks `timeout`; `gh api` file sha is `.sha` (top level).
 - Tests stub `localStorage` and `global fetch` (see `tests/` patterns);
   engine tests use a fake UCI worker, never real WASM.
