@@ -18,7 +18,10 @@ export function EvalBar({ score, sideToMove, flipped = false }: Props) {
   const pct = evalWhitePct(score, sideToMove);
   // sign omitted: position + colour carry it (bottom/white = White better,
   // top/black = Black better), chess.com-style - keeps the text narrow
-  const label = formatEval(score, sideToMove).replace(/^[+−-]/, "");
+  let label = formatEval(score, sideToMove).replace(/^[+−-]/, "");
+  // >= 10 pawns: drop the decimal (shorter text, the fraction is noise)
+  const m = label.match(/^(\d+)\.\d$/);
+  if (m && Number(m[1]) >= 10) label = m[1];
   const whiteLeads = pct >= 50;
   // White's section is anchored at the bottom (or at the top when flipped);
   // it is >= 50% tall when White leads, so a small inset is always inside it.
