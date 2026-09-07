@@ -8,10 +8,10 @@
 
 **Game review, entirely in your browser.** Enter a username, and Stockfish 18
 (WASM) analyses every one of their last-30-days games on your device:
-per-move classification (`!!` `!` `?` `??` and friends), eval bar, top-3
-engine lines, accuracy, and branching - drag any legal move off the mainline
-and it's evaluated immediately, with "Back to game" to return. No server
-computation, no API keys.
+per-move classification (`!!` `!` `?` `??` and friends), eval bar, advantage
+graph, top-3 engine lines, accuracy, and branching - drag any legal move off
+the mainline and it's evaluated immediately, with "Back to game" to return.
+No server computation, no API keys.
 
 | Games | Review |
 |---|---|
@@ -29,9 +29,14 @@ computation, no API keys.
 - 📊 Per-player accuracy (expected-loss model, rating-scaled) and the
   engine's top-3 lines for every position
 - 🔀 Branching: explore any off-mainline line, evaluated on the fly
-- 📈 Stats view: resumable 30-day full-analysis run, win rates by time class
-  and colour, per-opening breakdown, elo trajectory, accuracy histogram,
-  blunders per game, results by hour
+- 📈 Stats view: resumable 30-day full-analysis run; win-probability curves
+  (Stockfish's own WDL model) with the decisive move marked, a loss autopsy
+  where every row jumps straight to the move that decided the game, a
+  mistake-cause donut (hanging pieces, forks, missed captures, time
+  trouble), clock panel, phase split, conversion of won positions,
+  performance rating vs expected score, improvement trend, Elo trajectory
+- 🖱️ Every chart is interactive: exact values on hover, click to jump into
+  the review at that move
 - 📖 Opening recognition (Lichess CC0 dataset, 3,810 openings) with book
   moves marked on the board and in the move list
 - 🗄️ Server-side SQLite (bun:sqlite): games and analyses shared across all
@@ -45,7 +50,7 @@ computation, no API keys.
 bun install          # postinstall fetches the Stockfish builds + opening index
 bun run dev          # frontend  -> http://localhost:5173
 bun server/index.ts  # data API + SQLite -> http://localhost:3000
-bun test             # 188 tests
+bun test             # 214 tests
 ```
 
 `?demo` loads the Opera Game (Morphy 1858) fully offline.
@@ -72,6 +77,7 @@ script, data backup): **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Engine, classification, accuracy, openings, state, analysis store, settings, testing |
 | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Registries, TrueNAS Scale, certificates, SQLite backup |
 | [docs/SECURITY-AUDIT.md](./docs/SECURITY-AUDIT.md) | Secret scan, hardening, residual risks |
+| [docs/STATS-ROADMAP.md](./docs/STATS-ROADMAP.md) | Stats metrics: research behind each one, what shipped, non-goals |
 | [docs/PRE-PUBLISH-CHECKLIST.md](./docs/PRE-PUBLISH-CHECKLIST.md) | Final publish report |
 
 ## License
