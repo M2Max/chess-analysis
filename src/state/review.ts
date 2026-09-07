@@ -117,6 +117,7 @@ export type Action =
       /** cached mainline moves (moves[i] = mainline index i+1) */
       moves: CachedMove[];
     }
+  | { type: "RESET_ANALYSIS"; gen: number }
   | { type: "PROGRESS"; gen: number; done: number; total: number }
   | { type: "ANALYSIS_FINISHED"; gen: number }
   | { type: "SET_CURSOR"; cursor: number }
@@ -283,6 +284,35 @@ export function reviewReducer(state: ReviewState, action: Action): ReviewState {
         nodes,
         line: [...state.mainline],
         cursor: state.mainline.length - 1,
+      };
+    }
+
+    case "RESET_ANALYSIS": {
+      // re-run with stronger settings ("Analyze with current setting"):
+      // wipe every analysis result (branches included) so the progressive
+      // animation and the eval chart build up again from move 1
+      if (action.gen !== state.gen) return state;
+      const nodes = state.nodes.map((n): AnalysisNode => ({
+        ...n,
+        score: null,
+        bestUci: null,
+        bestSan: null,
+        pv: [],
+        achievedDepth: null,
+        multi: [],
+        category: null,
+        loss: null,
+        delta: null,
+        thinking: false,
+      }));
+      return {
+        ...state,
+        nodes,
+        line: [...state.mainline],
+        cursor: 0,
+        progress: { done: 0, total: state.mainline.length },
+        status: "analyzing",
+        error: null,
       };
     }
 

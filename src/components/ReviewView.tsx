@@ -275,6 +275,11 @@ export function ReviewView({
     } catch {
       return;
     }
+    // start over visibly: drop the hydrated (weaker) results so the reveal
+    // animation and the eval chart replay with the new analysis; on finish
+    // putAnalysis replaces the stored entry (server-side rank guard)
+    setUpgradable(null);
+    dispatch({ type: "RESET_ANALYSIS", gen: st.gen });
     const engine = getEngine(engineKind, threads);
     void runAnalysis(st.gen, engine, parsed);
   }, [game, engineKind, threads, runAnalysis]);
