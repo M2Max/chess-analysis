@@ -79,7 +79,8 @@ export function toCachedAnalysis(args: {
 
 export interface StatsProgress {
   state: "running" | "done" | "stopped" | "error";
-  /** 0-based index of the game currently being analysed */
+  /** games fully done, INCLUDING the ones skipped as already-analysed
+   * (resume) - so (gameIndex + 1) / gameTotal is the overall position */
   gameIndex: number;
   gameTotal: number;
   moveDone: number;
@@ -119,7 +120,7 @@ export async function runStats(opts: RunStatsOptions): Promise<void> {
 
   const progress: StatsProgress = {
     state: "running",
-    gameIndex: 0,
+    gameIndex: preDone,
     gameTotal: games.length,
     moveDone: 0,
     moveTotal: 0,
@@ -146,7 +147,7 @@ export async function runStats(opts: RunStatsOptions): Promise<void> {
   let doneThisRun = 0;
 
   try {
-    for (const { g, i } of pending) {
+    for (const { g } of pending) {
       if (signal.aborted) {
         progress.state = "stopped";
         emit();
@@ -154,7 +155,9 @@ export async function runStats(opts: RunStatsOptions): Promise<void> {
       }
       const youWhite = g.white.username.toLowerCase() === username.toLowerCase();
       const opp = youWhite ? g.black : g.white;
-      progress.gameIndex = i;
+      // overall completed count (skipped + done this run), NOT the index in
+      // the games array: the counter and bar must reflect the whole set
+      progress.gameIndex = preDone + doneThisRun;
       progress.label = `vs ${opp.name} (${timeControlLabel(g, t)})`;
       emit();
 
