@@ -228,6 +228,10 @@ const STRINGS = {
     it: "Trascina una mossa legale per esplorare un ramo: viene valutata subito. Usa ←/→ per navigare e \"Torna alla partita\" per riavere la linea principale.",
     en: "Drag any legal move to explore a branch: it is evaluated immediately. Use ←/→ to navigate and \"Back to game\" to return to the played game.",
   },
+  evalChartTitle: {
+    it: "Andamento della valutazione: clicca per saltare a una mossa",
+    en: "Evaluation over the game: click to jump to a move",
+  },
   bestLines: { it: "Migliori linee", en: "Best lines" },
   bestLinesWaiting: { it: "in attesa della valutazione…", en: "waiting for evaluation…" },
   engineMove: {

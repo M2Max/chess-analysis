@@ -28,6 +28,7 @@ import { TopLines } from "./TopLines";
 import { timeControlLabel } from "./GameList";
 import { MoveList } from "./MoveList";
 import { MoveStrip } from "./MoveStrip";
+import { EvalChart } from "./EvalChart";
 import { Spinner } from "./Spinner";
 
 let genCounter = 0;
@@ -482,7 +483,7 @@ export function ReviewView({
         {/* left: board + nav */}
         <div className="mx-auto w-full min-w-0 max-w-[600px]">
           <div className="flex gap-2">
-            <EvalBar score={curNode.score} sideToMove={stm} />
+            <EvalBar score={curNode.score} sideToMove={stm} flipped={orientation === "black"} />
             <div className="relative min-w-0 flex-1" ref={boardWrapRef}>
               <Chessboard
                 options={{
@@ -626,6 +627,14 @@ export function ReviewView({
 
           {/* mobile: horizontal move slider (desktop uses the vertical list) */}
           <MoveStrip state={state} onSelectMove={selectMove} />
+
+          {/* advantage graph (click to jump to a move) */}
+          <EvalChart
+            nodes={state.line.map((idx) => state.nodes[idx])}
+            cursor={state.cursor}
+            onSelect={selectMove}
+            flipped={orientation === "black"}
+          />
 
           <p className="mt-2 text-[11px] text-ink-faint">{t("dragHint")}</p>
         </div>
