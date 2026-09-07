@@ -75,7 +75,11 @@ openssl req -x509 -newkey rsa:4096 -nodes -days 365 \
 ```
 
 The compose file mounts `./certs` read-only and sets `HTTPS=true`,
-`SSL_KEY=/app/certs/key.pem`, `SSL_CERT=/app/certs/cert.pem`. If the cert
+`SSL_KEY=/app/certs/key.pem`, `SSL_CERT=/app/certs/cert.pem`. The server
+process runs as the unprivileged `node` user, so the entrypoint copies the
+cert into a node-readable in-container file at startup - a root-owned `600`
+`key.pem` on the host works out of the box (without that copy it would
+silently fall back to plain HTTP). If the cert
 is missing the server still boots but **falls back to plain HTTP** and logs
 a warning - the app works, only the multi-threaded engine is unavailable.
 

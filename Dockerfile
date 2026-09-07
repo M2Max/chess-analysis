@@ -47,7 +47,10 @@ EXPOSE 3000
 ENV NODE_ENV=production
 
 # The server process runs as the unprivileged `node` user (uid 1000), not
-# root. When the container starts as root (fresh install, or a host-mounted
-# volume owned by root) the entrypoint chowns the data dir first so the
-# unprivileged process can always create/write the database.
-ENTRYPOINT ["sh", "-c", "if [ \"$(id -u)\" = 0 ]; then chown -R node:node /app/data; fi; exec su-exec node bun server/index.ts"]
+# root. The entrypoint (running as root) makes the root-owned host mounts
+# usable first: chown of the data dir + copying the TLS cert into a node-
+# readable in-container file (a root-owned 600 key.pem on the host would
+# otherwise silently degrade the server to plain HTTP).
+COPY docker-entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
