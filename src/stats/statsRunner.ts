@@ -20,6 +20,7 @@ import { getEngine } from "../engine/engine";
 import { timeControlLabel } from "../components/GameList";
 import type { TFn } from "../i18n";
 import type { GameSummary } from "./statsData";
+import { buildImprove } from "./improve";
 
 /**
  * Fold one analysed game into a CachedAnalysis (the same shape ReviewView
@@ -231,6 +232,7 @@ async function analyseOne(g: Game, o: AnalyseOneOptions): Promise<GameSummary> {
     userAccs: [],
     userAcc: null,
     opening: null,
+    imp: null,
   };
 
   let parsed;
@@ -284,7 +286,47 @@ async function analyseOne(g: Game, o: AnalyseOneOptions): Promise<GameSummary> {
     positions,
     ratings,
   });
-  if (entry) void putAnalysis(g.id, entry);
+  if (entry) {
+    void putAnalysis(g.id, entry);
+    // build the improvement block right away (from the same data the server
+    // just received) so a live stats run fills the analytics without reload
+    try {
+      base.imp = buildImprove(
+        {
+          id: g.id,
+          utc: g.utc,
+          result: g.result,
+          timeClass: g.timeClass,
+          timeControl: g.timeControl,
+          whiteUsername: g.white.username,
+          blackUsername: g.black.username,
+          whiteRating: g.white.rating ?? null,
+          blackRating: g.black.rating ?? null,
+          youWhite: o.youWhite,
+          analyzed: true,
+          opening: base.opening,
+          whiteAcc: entry.whiteAcc,
+          blackAcc: entry.blackAcc,
+          pgn: g.pgn,
+          moves: entry.moves.map((m, i) => ({
+            ply: i,
+            color: m.color,
+            san: m.san,
+            delta: m.delta,
+            category: m.category,
+            bestUci: m.bestUci,
+            bestSan: m.bestSan,
+            scoreCp: m.score?.cp ?? null,
+            scoreMate: m.score?.mate ?? null,
+            bestMate: m.multi?.[0]?.score?.mate ?? null,
+          })),
+        },
+        o.youWhite ? g.white.username : g.black.username,
+      );
+    } catch {
+      base.imp = null;
+    }
+  }
 
   const counts = base.counts;
   for (const m of moves) {

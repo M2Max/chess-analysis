@@ -501,8 +501,23 @@ export interface StatsGameRow {
   opening: { eco: string; name: string; depth: number } | null;
   whiteAcc: number | null;
   blackAcc: number | null;
+  /** raw PGN (clocks / termination for the improvement analytics) */
+  pgn: string;
   /** per-move rows of the stored analysis (mover view), when analyzed */
-  moves: { ply: number; color: "w" | "b"; delta: number; category: string }[];
+  moves: {
+    ply: number;
+    color: "w" | "b";
+    san: string;
+    delta: number;
+    category: string;
+    bestUci: string | null;
+    bestSan: string | null;
+    /** exactly one of scoreCp/scoreMate is set (side-to-move view) */
+    scoreCp: number | null;
+    scoreMate: number | null;
+    /** mate distance of the engine's best line (line 1) at this position */
+    bestMate: number | null;
+  }[];
 }
 
 /**
@@ -522,12 +537,12 @@ export function getStatsForPlayer(
   if (opts.fromUtc != null) { where.push("g.utc >= ?"); params.push(opts.fromUtc); }
   if (opts.toUtc != null) { where.push("g.utc <= ?"); params.push(opts.toUtc); }
   interface StatsGameHead {
-    id: string; utc: number; result: string; time_class: string; time_control: string;
+    id: string; utc: number; result: string; time_class: string; time_control: string; pgn: string;
     white_username: string; black_username: string; white_rating: number | null; black_rating: number | null;
   }
   const games = allOf<StatsGameHead>(
     d.query(
-      `SELECT g.id, g.utc, g.result, g.time_class, g.time_control,
+      `SELECT g.id, g.utc, g.result, g.time_class, g.time_control, g.pgn,
               g.white_username, g.black_username, g.white_rating, g.black_rating
        FROM games g JOIN player_games pg ON pg.game_id = g.id
        WHERE ${where.join(" AND ")} ORDER BY g.utc DESC`,
@@ -539,16 +554,34 @@ export function getStatsForPlayer(
   const movesByGame = new Map<string, StatsGameRow["moves"]>();
   if (ids.length > 0) {
     const marks = ids.map(() => "?").join(",");
-    const rows = allOf<{ game_id: string; ply: number; color: string; delta: number; category: string }>(
+    const rows = allOf<{
+      game_id: string; ply: number; color: string; san: string; delta: number; category: string;
+      best_uci: string | null; best_san: string | null; score_cp: number | null; score_mate: number | null;
+      line_mate: number | null;
+    }>(
       d.query(
-        `SELECT game_id, ply, color, delta, category FROM analysis_moves
-         WHERE game_id IN (${marks}) ORDER BY game_id, ply`,
+        `SELECT m.game_id, m.ply, m.color, m.san, m.delta, m.category, m.best_uci, m.best_san,
+                m.score_cp, m.score_mate, l.score_mate AS line_mate
+         FROM analysis_moves m
+         LEFT JOIN analysis_lines l ON l.game_id = m.game_id AND l.ply = m.ply AND l.line_no = 1
+         WHERE m.game_id IN (${marks}) ORDER BY m.game_id, m.ply`,
       ),
       ids,
     );
     for (const r of rows) {
       const arr = movesByGame.get(r.game_id) ?? [];
-      arr.push({ ply: r.ply, color: r.color as "w" | "b", delta: r.delta, category: r.category });
+      arr.push({
+        ply: r.ply,
+        color: r.color as "w" | "b",
+        san: r.san,
+        delta: r.delta,
+        category: r.category,
+        bestUci: r.best_uci,
+        bestSan: r.best_san,
+        scoreCp: r.score_cp,
+        scoreMate: r.score_mate,
+        bestMate: r.line_mate,
+      });
       movesByGame.set(r.game_id, arr);
     }
   }
@@ -570,6 +603,7 @@ export function getStatsForPlayer(
       opening: meta?.opening ?? null,
       whiteAcc: meta?.whiteAcc ?? null,
       blackAcc: meta?.blackAcc ?? null,
+      pgn: g.pgn,
       moves: movesByGame.get(g.id) ?? [],
     };
   });

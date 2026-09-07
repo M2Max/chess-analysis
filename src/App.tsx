@@ -76,6 +76,8 @@ function AppInner({
   const [reviewGame, setReviewGame] = useState<Game | null>(() =>
     new URLSearchParams(window.location.search).has("demo") ? DEMO_GAME : null,
   );
+  /** when opened from the stats autopsy: ply to park the cursor on */
+  const [reviewPly, setReviewPly] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [langOpen, setLangOpen] = useState(false);
@@ -123,7 +125,8 @@ function AppInner({
     });
   }, [settings.engine, settings.threads]);
 
-  const openGame = useCallback((game: Game) => {
+  const openGame = useCallback((game: Game, ply?: number) => {
+    setReviewPly(ply ?? null);
     setReviewGame(game);
     setScreen("review");
   }, []);
@@ -344,6 +347,7 @@ function AppInner({
               games={list.games}
               username={list.username}
               onBack={() => setScreen("list")}
+              onOpenGame={openGame}
             />
           ) : settings.username.trim() ? (
             <div className="mx-auto mt-16 flex max-w-lg items-center justify-center gap-3 rounded-lg bg-card p-10 text-ink-mute ring-1 ring-line">
@@ -365,8 +369,9 @@ function AppInner({
 
         {screen === "review" && reviewGame && (
           <ReviewView
-            key={reviewGame.id}
+            key={`${reviewGame.id}:${reviewPly ?? "n"}`}
             game={reviewGame}
+            initialPly={reviewPly ?? undefined}
             engineKind={settings.engine}
             threads={settings.threads}
             analysisMode={settings.analysis}

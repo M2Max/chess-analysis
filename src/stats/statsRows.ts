@@ -19,6 +19,21 @@ export interface StatsGameRow {
   opening: { eco: string; name: string; depth: number } | null;
   whiteAcc: number | null;
   blackAcc: number | null;
+  /** raw PGN (clocks / termination for the improvement analytics) */
+  pgn: string;
   /** per-move rows of the stored analysis (mover view), when analyzed */
-  moves: { ply: number; color: "w" | "b"; delta: number; category: string }[];
+  moves: {
+    ply: number;
+    color: "w" | "b";
+    san: string;
+    delta: number;
+    category: string;
+    bestUci: string | null;
+    bestSan: string | null;
+    /** exactly one of scoreCp/scoreMate is set (side-to-move view) */
+    scoreCp: number | null;
+    scoreMate: number | null;
+    /** mate distance of the engine's best line (line 1) at this position */
+    bestMate: number | null;
+  }[];
 }

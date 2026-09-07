@@ -1,17 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import {
   accuracyForGames,
-  accuracyHistogram,
+  clockStats,
+  conversionStats,
   eloSeries,
-  mistakesByClass,
+  expectedScore,
+  gapCurve,
+  improvementTrend,
+  motifStats,
   openingStats,
+  performanceRating,
+  phaseStats,
   pickTab,
   resultsByHour,
   resultsFor,
   summariesFromRows,
-  winrateByGap,
   type GameSummary,
 } from "../src/stats/statsData";
+import type { ImproveBlock } from "../src/stats/improve";
+import type { Motif } from "../src/stats/motifs";
 import type { StatsGameRow } from "../src/stats/statsRows";
 
 function game(p: Partial<GameSummary>): GameSummary {
@@ -30,8 +37,34 @@ function game(p: Partial<GameSummary>): GameSummary {
     userAccs: p.userAccs ?? [],
     userAcc: p.userAcc ?? null,
     opening: p.opening ?? null,
+    imp: p.imp ?? null,
   };
 }
+
+/** Minimal improve block for aggregation tests. */
+function imp(p: Partial<ImproveBlock>): ImproveBlock {
+  return {
+    term: "resign",
+    wp: p.wp ?? [50, 50],
+    wpStart: 50,
+    endPly: p.endPly ?? null,
+    bookPly: p.bookPly ?? 0,
+    clocks: p.clocks ?? { initial: 0, spent: [], remaining: [], increment: 0 },
+    motifs: p.motifs ?? [],
+    drop: p.drop ?? null,
+    peak: p.peak ?? { wp: 50, ply: 0 },
+    worst: p.worst ?? { wp: 50, ply: 0 },
+  };
+}
+
+const motif = (ply: number, m: Motif, drop: number) => ({
+  ply,
+  san: "Qd5",
+  motif: m,
+  drop,
+  bestSan: "Qe7",
+  remaining: null,
+});
 
 describe("resultsFor / pickTab", () => {
   const games = [
@@ -129,50 +162,141 @@ describe("eloSeries", () => {
   });
 });
 
-describe("accuracyHistogram", () => {
-  test("buckets per-move accuracies", () => {
+describe("performanceRating / expectedScore", () => {
+  test("equal-score set returns ~average opponent", () => {
     const games = [
-      game({ userAccs: [40, 50, 70, 85, 95, 100, 94, 71] }),
+      game({ id: "1", youWhite: true, whiteRating: 1200, blackRating: 1200, result: "1-0" }),
+      game({ id: "2", youWhite: true, whiteRating: 1200, blackRating: 1200, result: "0-1" }),
+      game({ id: "3", youWhite: true, whiteRating: 1200, blackRating: 1200, result: "1/2-1/2" }),
+      game({ id: "4", youWhite: true, whiteRating: 1200, blackRating: 1200, result: "1-0" }),
+      game({ id: "5", youWhite: true, whiteRating: 1200, blackRating: 1200, result: "0-1" }),
     ];
-    const h = accuracyHistogram(games);
-    // 40→<50 · 50→50–70 · 70,71→70–85 · 85,94→85–95 · 95,100→95–100
-    expect(h.map((b) => b.count)).toEqual([1, 1, 2, 2, 2]);
+    expect(performanceRating(games)).toBeCloseTo(1200, -1);
+  });
+  test("too few games → null", () => {
+    expect(performanceRating([game({}), game({ id: "2" })])).toBeNull();
+  });
+  test("expected score anchors", () => {
+    expect(expectedScore(0)).toBeCloseTo(0.5);
+    expect(expectedScore(200)).toBeCloseTo(0.759, 2);
+    expect(expectedScore(-200)).toBeCloseTo(0.241, 2);
   });
 });
 
-describe("mistakesByClass", () => {
-  test("averages weak moves and blunders per game", () => {
+describe("gapCurve", () => {
+  test("buckets, actual vs expected, pr delta", () => {
     const games = [
-      game({
-        id: "1",
-        timeClass: "blitz",
-        counts: { inaccuracy: 1, mistake: 1, blunder: 2 },
+      game({ id: "1", youWhite: true, whiteRating: 1200, blackRating: 1200, result: "1-0" }), // mid 0
+      game({ id: "2", youWhite: true, whiteRating: 1200, blackRating: 1210, result: "1-0" }), // mid 0
+      game({ id: "3", youWhite: true, whiteRating: 1200, blackRating: 1190, result: "1-0" }), // mid 0
+      game({ id: "4", youWhite: true, whiteRating: 1600, blackRating: 1200, result: "1-0" }), // mid +450
+    ];
+    const rows = gapCurve(games);
+    const even = rows.find((r) => r.mid === 0)!;
+    expect(even).toMatchObject({ n: 3, wins: 3, actual: 1 });
+    expect(even.pr).not.toBeNull();
+    expect(even.pr!).toBeGreaterThan(300); // 100% vs equal → big positive perf
+    const strong = rows.find((r) => r.mid === 450)!;
+    expect(strong.n).toBe(1);
+  });
+});
+
+describe("conversionStats", () => {
+  test("won-from-won, saved-from-lost, thrown wins", () => {
+    const games = [
+      game({ id: "1", result: "1-0", imp: imp({ peak: { wp: 92, ply: 20 }, worst: { wp: 50, ply: 0 } }) }),
+      game({ id: "2", result: "0-1", oppName: "Bad", imp: imp({ peak: { wp: 90, ply: 10 }, worst: { wp: 5, ply: 40 } }) }),
+      game({ id: "3", result: "1/2-1/2", imp: imp({ peak: { wp: 50, ply: 0 }, worst: { wp: 10, ply: 30 } }) }),
+      game({ id: "4", result: "0-1", imp: imp({ peak: { wp: 40, ply: 5 }, worst: { wp: 60, ply: 1 } }) }), // black worst flipped
+    ];
+    const c = conversionStats(games);
+    expect(c.reachedWon).toBe(2);
+    expect(c.wonWon).toBe(1);
+    expect(c.thrown.map((g) => g.id)).toEqual(["2"]);
+    expect(c.savedLost).toBe(1); // g3 reached 10 and drew
+    expect(c.reachedLost).toBe(2); // g2 (5) + g3 (10)
+  });
+});
+
+describe("phaseStats", () => {
+  test("splits user moves by book/endgame ply", () => {
+    // white: plies 0,1,2,3,4,5 - bookPly 2 → opening plies 0-1, endPly 4 → endgame 4-5
+    const g = game({
+      id: "1",
+      youWhite: true,
+      userAccs: [90, 80, 70, 60, 50, 40],
+      imp: imp({
+        bookPly: 2,
+        endPly: 4,
+        wp: [60, 50, 45, 40, 38, 30],
+        motifs: [motif(2, "hang", 12)],
       }),
-      game({ id: "2", timeClass: "blitz", counts: { blunder: 1 } }),
-      game({ id: "3", timeClass: "bullet", counts: { inaccuracy: 4 } }),
-    ];
-    const rows = mistakesByClass(games);
-    const blitz = rows.find((r) => r.tab === "blitz")!;
-    expect(blitz.games).toBe(2);
-    expect(blitz.avgWeak).toBe(1); // (2 + 0) / 2
-    expect(blitz.avgBlunders).toBe(1.5);
-    const bullet = rows.find((r) => r.tab === "bullet")!;
-    expect(bullet.avgWeak).toBe(4);
-    expect(rows.map((r) => r.tab)).not.toContain("rapid"); // no rapid games
+    });
+    const rows = phaseStats([g]);
+    const byPhase = Object.fromEntries(rows.map((r) => [r.phase, r]));
+    // white owns plies 0,2,4 of this 6-ply game: opening / middlegame / endgame
+    expect(byPhase.opening.acc).toBe(90); // ply 0 (< bookPly 2)
+    expect(byPhase.middlegame?.acc).toBe(80); // ply 2 (userAccs[1])
+    expect(byPhase.endgame?.acc).toBe(70); // ply 4 (>= endPly 4, userAccs[2])
+    expect(byPhase.middlegame?.bad).toBe(1); // motif at ply 2
+    expect(byPhase.endgame!.leakPer30).toBeGreaterThan(0);
   });
 });
 
-describe("winrateByGap", () => {
-  test("buckets by opponent rating gap", () => {
+describe("clockStats", () => {
+  test("buckets mistakes by remaining time", () => {
+    const clocks = {
+      initial: 180,
+      increment: 0,
+      spent: [5, 5, 5, 5, 5, 5],
+      remaining: [175, 170, 165, 15, 10, 150], // remaining after each ply
+    };
+    // user = white: plies 0,2,4 - ply 0 has no "remaining before" and is skipped 
+    const g = game({
+      id: "1",
+      youWhite: true,
+      userAccs: [50, 50, 50],
+      imp: imp({
+        clocks,
+        wp: [40, 50, 30, 50, 20, 50],
+        motifs: [motif(2, "hang", 20), motif(4, "timePressure", 12)],
+      }),
+    });
+    const c = clockStats([g]);
+    expect(c.moves).toBe(2);
+    // ply 2 played with 170 s left, ply 4 with 15 s
+    expect(c.badLt20).toBe(1);
+    expect(c.badGt60).toBe(1);
+    expect(c.bad20To60).toBe(0);
+  });
+});
+
+describe("motifStats", () => {
+  test("cost per cause, sorted desc, shares sum to 1", () => {
     const games = [
-      game({ id: "1", youWhite: true, whiteRating: 1200, blackRating: 1400, result: "1-0" }), // vs stronger, win
-      game({ id: "2", youWhite: true, whiteRating: 1200, blackRating: 1250, result: "0-1" }), // even, loss
-      game({ id: "3", youWhite: false, whiteRating: 1000, blackRating: 1200, result: "0-1" }), // vs weaker, win (black)
+      game({ id: "1", imp: imp({ motifs: [motif(2, "hang", 40), motif(8, "fork", 10)] }) }),
+      game({ id: "2", imp: imp({ motifs: [motif(4, "hang", 50)] }) }),
     ];
-    const rows = winrateByGap(games);
-    expect(rows[0]).toMatchObject({ gap: "stronger", total: 1, wins: 1 });
-    expect(rows[1]).toMatchObject({ gap: "even", total: 1, wins: 0 });
-    expect(rows[2]).toMatchObject({ gap: "weaker", total: 1, wins: 1 });
+    const rows = motifStats(games);
+    expect(rows[0].motif).toBe("hang");
+    expect(rows[0].n).toBe(2);
+    expect(rows[0].points).toBeCloseTo(0.9); // (40+50)/100
+    expect(rows[0].share).toBeCloseTo(0.9, 2);
+    expect(rows.reduce((s, r) => s + r.share, 0)).toBeCloseTo(1);
+  });
+});
+
+describe("improvementTrend", () => {
+  test("rolling window + slope direction", () => {
+    const games = Array.from({ length: 40 }, (_, i) =>
+      game({ id: `g${i}`, utc: 1000 + i * 100, userAcc: 60 + Math.floor(i / 4), imp: imp({}) }),
+    );
+    const tr = improvementTrend(games, 10);
+    expect(tr.points.length).toBe(40);
+    expect(tr.from).toBe(61); // rolling window at index 9
+    expect(tr.to).toBe(68);
+    expect(tr.slope20).not.toBeNull();
+    expect(tr.slope20!).toBeGreaterThan(2);
   });
 });
 
@@ -194,10 +318,11 @@ describe("summariesFromRows (server rows → GameSummary)", () => {
       opening: over.opening ?? { eco: "C20", name: "King's Pawn Game", depth: 2 },
       whiteAcc: over.whiteAcc ?? null,
       blackAcc: over.blackAcc ?? null,
+      pgn: over.pgn ?? "",
       moves: over.moves ?? [
-        { ply: 0, color: "w", delta: 0, category: "opening" },
-        { ply: 1, color: "b", delta: 0, category: "best" },
-        { ply: 2, color: "w", delta: 120, category: "mistake" },
+        { ply: 0, color: "w", san: "e4", delta: 0, category: "opening", bestUci: null, bestSan: null, scoreCp: 30, scoreMate: null, bestMate: null },
+        { ply: 1, color: "b", san: "e5", delta: 0, category: "best", bestUci: null, bestSan: null, scoreCp: -20, scoreMate: null, bestMate: null },
+        { ply: 2, color: "w", san: "Nf3", delta: 120, category: "mistake", bestUci: null, bestSan: "d4", scoreCp: -140, scoreMate: null, bestMate: null },
       ],
     };
   };

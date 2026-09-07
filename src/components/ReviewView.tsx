@@ -56,6 +56,8 @@ interface Props {
   onBack: () => void;
   /** fired after a finished analysis was (re)stored in the cache */
   onAnalysisSaved?: () => void;
+  /** park the cursor after this ply once a cached analysis is hydrated */
+  initialPly?: number;
 }
 
 export function ReviewView({
@@ -70,6 +72,7 @@ export function ReviewView({
   onToggleArrow,
   onBack,
   onAnalysisSaved,
+  initialPly,
 }: Props) {
   const { t, locale } = useI18n();
   const [state, dispatch] = useReducer(reviewReducer, initialReviewState);
@@ -131,6 +134,10 @@ export function ReviewView({
       if (cached) {
         setOpening(cached.opening ?? null);
         dispatch({ type: "HYDRATE", gen, moves: cached.moves });
+        // opened from the stats autopsy: jump to the diagnosed move
+        if (initialPly != null) {
+          dispatch({ type: "SET_CURSOR", cursor: Math.min(initialPly + 1, nodes.length - 1) });
+        }
         if (comboRank(cached.engine, cached.mode) >= currentRank) {
           setUpgradable(null);
           dispatch({ type: "ANALYSIS_FINISHED", gen });
