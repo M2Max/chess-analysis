@@ -43,29 +43,32 @@ export function EvalChart({ nodes, cursor, onSelect, flipped = false }: Props) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
 
-  // plot up to the last analysed position (the curve grows during analysis)
+  // scored nodes only, keyed by their index in the line (x stays aligned
+  // with move numbers). Note: a cached/hydrated game has NO score on node 0
+  // (the start position is not a move), so this must not assume a full prefix.
   const pts = useMemo(() => {
-    const out: number[] = [];
-    for (const n of nodes) {
-      const cp = whiteCp(n);
-      if (cp == null) break;
-      out.push(cp);
-    }
+    const out: { x: number; cp: number }[] = [];
+    nodes.forEach((node, i) => {
+      const cp = whiteCp(node);
+      if (cp != null) out.push({ x: i, cp });
+    });
     return out;
   }, [nodes]);
 
-  const n = Math.max(pts.length - 1, 1);
-  const xLast = pts.length - 1;
-  const pairs = pts.map((cp, i) => `${i},${yOf(cp, flipped).toFixed(2)}`);
+  const n = Math.max(nodes.length - 1, 1);
+  const xLast = n;
+  const pairs = pts.map((p) => `${p.x},${yOf(p.cp, flipped).toFixed(2)}`);
   const line = pairs.join(" "); // polyline
   const curve = "M" + pairs.join(" L"); // path
-  const whiteArea = pts.length >= 2 ? `${curve} L${xLast},100 L0,100 Z` : "";
-  const blackArea = pts.length >= 2 ? `${curve} L${xLast},0 L0,0 Z` : "";
+  const firstX = pts[0]?.x ?? 0;
+  const lastX = pts[pts.length - 1]?.x ?? 0;
+  const whiteArea = pts.length >= 2 ? `${curve} L${lastX},100 L${firstX},100 Z` : "";
+  const blackArea = pts.length >= 2 ? `${curve} L${lastX},0 L${firstX},0 Z` : "";
   const markerX = Math.min(Math.max(cursor, 0), xLast);
 
   const handleClick = (e: React.MouseEvent) => {
     const el = ref.current;
-    if (!el || pts.length < 2) return;
+    if (!el || n < 1) return;
     const rect = el.getBoundingClientRect();
     const frac = (e.clientX - rect.left) / rect.width;
     onSelect(Math.min(Math.max(Math.round(frac * xLast), 0), xLast));
