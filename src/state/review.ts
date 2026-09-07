@@ -305,10 +305,13 @@ export function reviewReducer(state: ReviewState, action: Action): ReviewState {
         delta: null,
         thinking: false,
       }));
+      // line mirrors a fresh INIT (start node only): POSITION_DONE extends
+      // it one node at a time - revealing the whole mainline here would
+      // freeze the board on the start position with no replay animation
       return {
         ...state,
         nodes,
-        line: [...state.mainline],
+        line: [state.mainline[0]],
         cursor: 0,
         progress: { done: 0, total: state.mainline.length },
         status: "analyzing",
