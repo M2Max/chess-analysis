@@ -10,7 +10,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setDbPathForTests } from "../server/db";
+import { getDb, setDbPathForTests } from "../server/db";
 import type { CachedAnalysis } from "../src/api/analysisCache";
 
 // prevent server/index.ts from opening port 3000 when imported (bun test
@@ -25,6 +25,8 @@ beforeAll(async () => {
 
 const realFetch = globalThis.fetch;
 let chessCalls = 0;
+/** usernames whose PROFILE endpoint was called (multi-user tests) */
+const profileSeen: string[] = [];
 
 afterAll(() => {
   globalThis.fetch = realFetch;
@@ -59,6 +61,23 @@ beforeAll(() => {
         ],
       });
     }
+    const profile = url.match(/^https:\/\/api\.chess\.com\/pub\/player\/([a-z0-9_]+)$/);
+    if (profile) {
+      const name = profile[1];
+      if (name === "ghost") return Response.json({ error: "Not found" }, { status: 404 });
+      profileSeen.push(name);
+      return Response.json({
+        player_id: 1,
+        username: name,
+        name: name,
+        title: "NM",
+        last_online: 1,
+        blitz: { rating: 1234 },
+        rapid: { rating: 1100 },
+        classical: { rating: 1050 },
+        puzzles: { rating: 900 },
+      });
+    }
     if (url.startsWith("https://api.chess.com/pub/player/ghost/")) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
@@ -68,6 +87,11 @@ beforeAll(() => {
 
 const call = (path: string, init?: RequestInit) =>
   handleDbApi!(new Request(`http://srv${path}`, init), new URL(`http://srv${path}`));
+
+const callJson = async (path: string, init?: RequestInit) => {
+  const res = await call(path, init);
+  return res ? ((await res.json()) as unknown) : null;
+};
 
 const ENTRY: CachedAnalysis = {
   v: 2,
@@ -201,5 +225,64 @@ describe("analyses round-trip over HTTP", () => {
     expect(rows.find((r) => r.id === "a")!.analyzed).toBe(true);
     expect(rows.find((r) => r.id === "a")!.moves).toHaveLength(2);
     expect(rows.find((r) => r.id === "b")!.analyzed).toBe(true);
+  });
+});
+
+describe("POST/DELETE /api/db/players (multi-user)", () => {
+  const post = (body: unknown) =>
+    call("/api/db/players", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  test("POST valid username → 201 and the player appears with profile data", async () => {
+    const res = await post({ username: "Newguy" });
+    expect(res!.status).toBe(201);
+    const players = (await callJson("/api/db/players")) as {
+      username: string;
+      title: string | null;
+      ratings: { blitz?: number };
+    }[];
+    const p = players.find((x) => x.username === "Newguy");
+    expect(p).toBeDefined();
+    expect(p!.title).toBe("NM");
+    expect(p!.ratings.blitz).toBe(1234);
+  });
+
+  test("POST unknown account → 422 player-not-found", async () => {
+    const res = await post({ username: "ghost" });
+    expect(res!.status).toBe(422);
+    expect(((await res!.json()) as { error: string }).error).toBe("player-not-found");
+  });
+
+  test("POST malformed username → 400 (no upstream call needed)", async () => {
+    for (const bad of ["", "a", "no spaces allowed", "@", "x".repeat(30)]) {
+      const res = await post({ username: bad });
+      expect(res!.status).toBe(400);
+    }
+  });
+
+  test("GET ?refresh=1 tops up only STALE profiles (TTL guard)", async () => {
+    // force Newguy's profile cache stale behind the server's back
+    getDb().run("UPDATE players SET ratings_updated_at = 0 WHERE username = ?", ["Newguy"]);
+    profileSeen.length = 0;
+    await call("/api/db/players?refresh=1");
+    expect(profileSeen).toContain("newguy");
+
+    // now fresh: a second refresh must NOT call the profile endpoint again
+    profileSeen.length = 0;
+    await call("/api/db/players?refresh=1");
+    expect(profileSeen).not.toContain("newguy");
+  });
+
+  test("DELETE removes the player; second delete is a 404", async () => {
+    let res = await call("/api/db/players/Newguy", { method: "DELETE" });
+    expect(res!.status).toBe(200);
+    const players = (await callJson("/api/db/players")) as { username: string }[];
+    expect(players.some((p) => p.username === "Newguy")).toBe(false);
+
+    res = await call("/api/db/players/Newguy", { method: "DELETE" });
+    expect(res!.status).toBe(404);
   });
 });

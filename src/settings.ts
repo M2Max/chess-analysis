@@ -7,8 +7,6 @@ import type { Lang, Theme } from "./i18n";
  * under the old app name and is read once as a fallback.
  */
 export interface Settings {
-  /** the reviewed player's username (case preserved for display). */
-  username: string;
   /** which Stockfish build to use for analysis. */
   engine: EngineKind;
   /** UCI Threads; 0 = auto (hardware concurrency). Multi only in isolated docs. */
@@ -29,7 +27,6 @@ const STORAGE_KEY = "chess-analysis.settings.v2";
 const LEGACY_KEY = "chesscom-review.settings.v1";
 
 export const DEFAULT_SETTINGS: Settings = {
-  username: "",
   engine: "lite",
   threads: 0,
   flip: false,
@@ -51,7 +48,6 @@ function storage(): Storage | null {
 function parse(raw: string): Settings {
   const parsed = JSON.parse(raw) as Partial<Settings>;
   return {
-    username: typeof parsed.username === "string" ? parsed.username : "",
     engine: parsed.engine === "full" ? "full" : "lite",
     threads:
       typeof parsed.threads === "number" &&
@@ -83,6 +79,43 @@ export function loadSettings(): Settings {
     return parse(raw);
   } catch {
     return { ...DEFAULT_SETTINGS };
+  }
+}
+
+/**
+ * The single username configured before multi-user management existed
+ * (stored in these settings under `username`). Read once to seed the
+ * Players grid with the user's account; returns "" when there is none.
+ */
+export function legacyUsername(): string {
+  try {
+    const store = storage();
+    if (!store) return "";
+    for (const key of [STORAGE_KEY, LEGACY_KEY]) {
+      const raw = store.getItem(key);
+      if (!raw) continue;
+      const u = (JSON.parse(raw) as { username?: unknown }).username;
+      if (typeof u === "string" && u.trim()) return u.trim();
+    }
+  } catch {
+    /* corrupted storage: nothing to migrate */
+  }
+  return "";
+}
+
+/** Drop the migrated `username` from stored settings (seeded once). */
+export function clearLegacyUsername(): void {
+  try {
+    const store = storage();
+    if (!store) return;
+    const raw = store.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    if (!("username" in obj)) return;
+    delete obj.username;
+    store.setItem(STORAGE_KEY, JSON.stringify(obj));
+  } catch {
+    /* nothing sane to clear */
   }
 }
 

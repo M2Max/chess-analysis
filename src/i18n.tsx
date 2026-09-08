@@ -51,6 +51,7 @@ const STRINGS = {
 
   // ── settings ─────────────────────────────────────────────────────────────
   backToGames: { it: "← Partite", en: "← Games" },
+  backToPlayers: { it: "← Giocatori", en: "← Players" },
   backToSettings: { it: "← Impostazioni", en: "← Settings" },
   settingsTitle: { it: "Impostazioni", en: "Settings" },
   settingsSubtitle: {
@@ -106,6 +107,7 @@ const STRINGS = {
     en: "Statistics work on your last 30 days of games: set a username first.",
   },
   goSettings: { it: "Vai alle impostazioni", en: "Go to settings" },
+  goPlayers: { it: "Vai ai giocatori", en: "Go to players" },
   loadingGames: { it: "Carico le partite…", en: "Loading your games…" },
 
   // ── game list ────────────────────────────────────────────────────────────
@@ -464,6 +466,46 @@ const STRINGS = {
     it: "Nessun errore classificato: la diagnostica appare dopo la prima esecuzione completa.",
     en: "No diagnosed mistakes yet: analytics appear after the first full run.",
   },
+
+  // Players grid (multi-user management)
+  playersTitle: { it: "Giocatori", en: "Players" },
+  playersSubtitle: {
+    it: "Account tracciati, con ratings e analisi",
+    en: "Tracked accounts, with ratings and analysis",
+  },
+  playersRefresh: { it: "Aggiorna", en: "Refresh" },
+  playersLoading: { it: "Carico i giocatori…", en: "Loading players…" },
+  playersEmpty: {
+    it: "Nessun giocatore tracciato: aggiungine uno per iniziare.",
+    en: "No tracked players yet: add one to get started.",
+  },
+  addPlayer: { it: "Aggiungi giocatore", en: "Add player" },
+  addPlayerTitle: { it: "Aggiungi un giocatore", en: "Add a player" },
+  addPlayerHint: {
+    it: "Nome utente chess.com (senza @)",
+    en: "chess.com username (no @)",
+  },
+  addPlayerBtn: { it: "Aggiungi", en: "Add" },
+  errorInvalidUsername: {
+    it: "Username non valido: 2-25 caratteri tra lettere, numeri e _",
+    en: "Invalid username: 2-25 characters, letters/digits/underscore",
+  },
+  lastPlayed: { it: "Ultima partita", en: "Last played" },
+  lastPlayedNever: { it: "mai giocato", en: "never played" },
+  playerGamesCount: { it: "{n} partite", en: "{n} games" },
+  playerAnalyzedCount: { it: "{n} analizzate", en: "{n} analysed" },
+  playerOpen: { it: "Apri le partite", en: "Open games" },
+  removePlayer: { it: "Rimuovi giocatore", en: "Remove player" },
+  removePlayerTitle: { it: "Rimuovere il giocatore?", en: "Remove this player?" },
+  removeConfirmBody: {
+    it: "Stai per rimuovere {username}: verranno eliminati dal database {games} partite e {analyses} analisi salvate.",
+    en: "You are about to remove {username}: {games} games and {analyses} saved analyses will be deleted from the database.",
+  },
+  removeConfirmHint: {
+    it: "Le partite condivise con altri giocatori tracciati vengono conservate. Rianalizzare costa di nuovo tempo del motore.",
+    en: "Games shared with other tracked players are kept. Re-analysing costs engine time again.",
+  },
+  removePlayerBtn: { it: "Rimuovi", en: "Remove" },
 } as const;
 
 export type StrKey = keyof typeof STRINGS;

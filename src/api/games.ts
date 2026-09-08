@@ -105,6 +105,60 @@ export function normalizeUsername(input: string): string {
   return input.trim().replace(/^@/, "").toLowerCase();
 }
 
+/** Everything the Players grid needs from the public profile endpoint. */
+export interface PlayerSummary {
+  /** canonical (lowercase) username - use `name` for display */
+  username: string;
+  name: string;
+  title?: string;
+  ratings: {
+    chess?: number;
+    blitz?: number;
+    rapid?: number;
+    classical?: number;
+    puzzles?: number;
+  };
+  lastOnline?: number;
+}
+
+function ratingOf(json: Record<string, unknown>, key: string): number | undefined {
+  const block = json[key] as { rating?: number } | undefined;
+  return block && typeof block.rating === "number" ? block.rating : undefined;
+}
+
+/**
+ * Full profile: title + per-time-class ratings + last-online.
+ * Throws UnknownPlayerError on 404 (doubles as the "does this player
+ * exist?" validation when adding a tracked player).
+ */
+export async function fetchPlayerSummary(username: string): Promise<PlayerSummary> {
+  const u = normalizeUsername(username);
+  if (!u) throw new ApiError("username required");
+  let json: Record<string, unknown>;
+  try {
+    json = (await fetchJson(`${BASE}/player/${encodeURIComponent(u)}`)) as Record<string, unknown>;
+  } catch (e) {
+    if (e instanceof ApiError && (e as { notFound?: boolean }).notFound) {
+      throw new UnknownPlayerError(u);
+    }
+    throw e;
+  }
+  return {
+    username: typeof json.username === "string" ? json.username : u,
+    name: typeof json.name === "string" && json.name ? json.name : u,
+    title: typeof json.title === "string" ? json.title : undefined,
+    ratings: {
+      chess: ratingOf(json, "chess"),
+      blitz: ratingOf(json, "blitz"),
+      rapid: ratingOf(json, "rapid"),
+      classical: ratingOf(json, "classical"),
+      puzzles: ratingOf(json, "puzzles"),
+    },
+    lastOnline:
+      typeof json.last_online === "number" ? json.last_online : undefined,
+  };
+}
+
 export async function fetchProfile(username: string): Promise<PlayerRef> {
   const u = normalizeUsername(username);
   if (!u) throw new ApiError("username required");

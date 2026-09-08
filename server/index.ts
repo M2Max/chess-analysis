@@ -4,16 +4,19 @@ import { join } from "path";
 import {
   ApiError,
   fetchLast30DaysGames,
+  fetchPlayerSummary,
   UnknownPlayerError,
 } from "../src/api/games";
 import type { CachedAnalysis } from "../src/api/analysisCache";
 import {
+  deletePlayer,
   getAnalysis,
   getGamesForPlayer,
   getStatsForPlayer,
   listIsFresh,
   listPlayers,
   saveAnalysisForGame,
+  savePlayerProfile,
   upsertList,
   upsertPlayer,
 } from "./db";
@@ -107,9 +110,70 @@ export async function handleDbApi(req: Request, url: URL): Promise<Response | nu
   // games.utc is stored in unix SECONDS - convert at the boundary
   const sec = (v: number | undefined) => (v != null ? Math.floor(v / 1000) : undefined);
 
-  // GET /api/db/players
+  // GET /api/db/players[?refresh=1] - tracked players, enriched from our
+  // cache; ?refresh=1 tops up profile data (title/ratings) older than the
+  // TTL straight from chess.com (sequential, failure-tolerant: one dead
+  // profile never breaks the grid)
   if (parts[1] === "players" && parts.length === 2 && req.method === "GET") {
+    const refresh = url.searchParams.get("refresh") === "1";
+    if (refresh) {
+      const ttlMs = 10 * 60 * 1000;
+      for (const p of listPlayers()) {
+        if (p.ratingsUpdatedAt != null && Date.now() - p.ratingsUpdatedAt < ttlMs) continue;
+        try {
+          const s = await fetchPlayerSummary(p.username);
+          savePlayerProfile(p.username, {
+            title: s.title ?? null,
+            blitz: s.ratings.blitz ?? null,
+            rapid: s.ratings.rapid ?? null,
+            classical: s.ratings.classical ?? null,
+            puzzles: s.ratings.puzzles ?? null,
+          });
+        } catch {
+          /* offline / deleted account / rate limit: serve cached values */
+        }
+      }
+    }
     return json(listPlayers());
+  }
+
+  // POST /api/db/players {username} - start tracking a player (validated
+  // against the public profile endpoint, 422 if it does not exist)
+  if (parts[1] === "players" && parts.length === 2 && req.method === "POST") {
+    const parsed = await readJsonBody(req);
+    if ("error" in parsed) return json({ error: parsed.error }, parsed.error === "payload too large" ? 413 : 400);
+    const body = parsed.value as { username?: unknown };
+    // chess.com account names: 2-25 alphanumerics/underscores
+    const username = typeof body?.username === "string" ? body.username.trim().replace(/^@/, "") : "";
+    if (!/^[A-Za-z0-9_]{2,25}$/.test(username)) {
+      return json({ error: "invalid-username" }, 400);
+    }
+    try {
+      const s = await fetchPlayerSummary(username);
+      upsertPlayer(username);
+      savePlayerProfile(username, {
+        title: s.title ?? null,
+        blitz: s.ratings.blitz ?? null,
+        rapid: s.ratings.rapid ?? null,
+        classical: s.ratings.classical ?? null,
+        puzzles: s.ratings.puzzles ?? null,
+      });
+    } catch (e) {
+      if (e instanceof UnknownPlayerError) return json({ error: "player-not-found" }, 422);
+      if (e instanceof ApiError) return json({ error: e.message }, 502);
+      throw e;
+    }
+    return json({ ok: true, username }, 201);
+  }
+
+  // DELETE /api/db/players/{u} - stop tracking + wipe that player's data
+  // (shared games survive if another tracked player still references them)
+  if (parts[1] === "players" && parts.length === 3 && req.method === "DELETE") {
+    const u = seg(2);
+    if (!u) return json({ error: "missing username" }, 400);
+    const res = deletePlayer(u);
+    if (!res.removed) return json({ error: "player not found" }, 404);
+    return json({ ok: true, gamesRemoved: res.gamesRemoved, analysesRemoved: res.analysesRemoved });
   }
 
   // GET /api/db/players/{u}/games[?refresh=1&from=&to=]

@@ -6,8 +6,9 @@
 [![engine: Stockfish 18 WASM](https://img.shields.io/badge/engine-Stockfish%2018%20WASM-10b981)](https://stockfishchess.org)
 [![platforms: linux amd64 / arm64](https://img.shields.io/badge/platforms-linux%20amd64%20%7C%20arm64-64748b)](./docs/DEPLOYMENT.md)
 
-**Game review, entirely in your browser.** Enter a username, and Stockfish 18
-(WASM) analyses every one of their last-30-days games on your device:
+**Game review, entirely in your browser.** Add a chess.com player (track as
+many as you like), and Stockfish 18 (WASM) analyses every one of their
+last-30-days games on your device:
 per-move classification (`!!` `!` `?` `??` and friends), eval bar, advantage
 graph, top-3 engine lines, accuracy, and branching - drag any legal move off
 the mainline and it's evaluated immediately, with "Back to game" to return.
@@ -21,6 +22,9 @@ No server computation, no API keys.
 
 ## Features
 
+- 👥 Multi-user: track several chess.com accounts - grid of cards with
+  ratings per time class, time since last game, add/remove (removal wipes
+  that player's stored data)
 - 🧠 In-browser Stockfish 18 WASM analysis - Lite (~7 MB, instant) or Full
   (~113 MB, strongest) net, single- or multi-threaded (auto-detected)
 - 🎯 Review-style move categories: `!!` brilliant · `!` great · `★` best ·
@@ -50,7 +54,7 @@ No server computation, no API keys.
 bun install          # postinstall fetches the Stockfish builds + opening index
 bun run dev          # frontend  -> http://localhost:5173
 bun server/index.ts  # data API + SQLite -> http://localhost:3000
-bun test             # 214 tests
+bun test             # 235 tests
 ```
 
 `?demo` loads the Opera Game (Morphy 1858) fully offline.

@@ -128,6 +128,18 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (game_id, ply, line_no)
   );
   `,
+  // v2 - multi-user management: cached public-profile data per player.
+  // avatar_url is unused today (v1 ships monogram avatars) but reserved so
+  // a future photo pass needs no schema change.
+  `
+  ALTER TABLE players ADD COLUMN title TEXT;
+  ALTER TABLE players ADD COLUMN rating_blitz INTEGER;
+  ALTER TABLE players ADD COLUMN rating_rapid INTEGER;
+  ALTER TABLE players ADD COLUMN rating_classical INTEGER;
+  ALTER TABLE players ADD COLUMN rating_puzzles INTEGER;
+  ALTER TABLE players ADD COLUMN avatar_url TEXT;
+  ALTER TABLE players ADD COLUMN ratings_updated_at INTEGER;
+  `,
 ];
 
 let db: Database | null = null;
@@ -618,26 +630,122 @@ export interface PlayerInfo {
   games: number;
   analyzed: number;
   lastFetchAt: number | null;
+  /** unix SECONDS of the newest game we hold for this player (null = none) */
+  lastGameUtc: number | null;
+  title: string | null;
+  ratings: { blitz?: number; rapid?: number; classical?: number; puzzles?: number };
+  /** unix ms of the last profile refresh (chess.com), null = never */
+  ratingsUpdatedAt: number | null;
 }
 
 export function listPlayers(): PlayerInfo[] {
   const d = getDb();
   const rows = d
     .query(
-      `SELECT p.username,
+      `SELECT p.username, p.title,
+              p.rating_blitz, p.rating_rapid, p.rating_classical, p.rating_puzzles,
+              p.ratings_updated_at,
               COUNT(pg.game_id) AS games,
               COUNT(a.game_id) AS analyzed,
-              (SELECT MAX(fetched_at) FROM fetches WHERE player_id = p.id) AS last_fetch_at
+              (SELECT MAX(fetched_at) FROM fetches WHERE player_id = p.id) AS last_fetch_at,
+              (SELECT MAX(g.utc) FROM player_games pg2
+                 JOIN games g ON g.id = pg2.game_id
+                WHERE pg2.player_id = p.id) AS last_game_utc
        FROM players p
        LEFT JOIN player_games pg ON pg.player_id = p.id
        LEFT JOIN analyses a ON a.game_id = pg.game_id
        GROUP BY p.id ORDER BY p.username`,
     )
-    .all() as { username: string; games: number; analyzed: number; last_fetch_at: number | null }[];
+    .all() as {
+      username: string;
+      title: string | null;
+      rating_blitz: number | null;
+      rating_rapid: number | null;
+      rating_classical: number | null;
+      rating_puzzles: number | null;
+      ratings_updated_at: number | null;
+      games: number;
+      analyzed: number;
+      last_fetch_at: number | null;
+      last_game_utc: number | null;
+    }[];
   return rows.map((r) => ({
     username: r.username,
     games: r.games,
     analyzed: r.analyzed,
     lastFetchAt: r.last_fetch_at,
+    lastGameUtc: r.last_game_utc,
+    title: r.title,
+    ratings: {
+      blitz: r.rating_blitz ?? undefined,
+      rapid: r.rating_rapid ?? undefined,
+      classical: r.rating_classical ?? undefined,
+      puzzles: r.rating_puzzles ?? undefined,
+    },
+    ratingsUpdatedAt: r.ratings_updated_at,
   }));
+}
+
+/**
+ * Cache the public-profile data (title + ratings) shown on the Players grid.
+ * `p.username` is the STORED username (case-sensitive match), not the query.
+ */
+export function savePlayerProfile(
+  username: string,
+  p: {
+    title?: string | null;
+    blitz?: number | null;
+    rapid?: number | null;
+    classical?: number | null;
+    puzzles?: number | null;
+  },
+): void {
+  const d = getDb();
+  d.run(
+    `UPDATE players
+        SET title = ?, rating_blitz = ?, rating_rapid = ?, rating_classical = ?,
+            rating_puzzles = ?, ratings_updated_at = ?
+      WHERE username = ?`,
+    [p.title ?? null, p.blitz ?? null, p.rapid ?? null, p.classical ?? null,
+      p.puzzles ?? null, Date.now(), username.trim()],
+  );
+}
+
+/**
+ * Remove a tracked player entirely: memberships/fetches cascade via FK;
+ * games that no other tracked player still references are deleted too (and
+ * their analyses cascade with them). Games SHARED with another tracked
+ * player survive. Returns what was removed (for the confirmation summary).
+ */
+export function deletePlayer(username: string): {
+  removed: boolean;
+  gamesRemoved: number;
+  analysesRemoved: number;
+} {
+  const d = getDb();
+  return d.transaction(() => {
+    const player = getOf<{ id: number }>(
+      d.query("SELECT id FROM players WHERE username = ?"),
+      [username.trim()],
+    );
+    if (!player) return { removed: false, gamesRemoved: 0, analysesRemoved: 0 };
+
+    d.run("DELETE FROM players WHERE id = ?", [player.id]);
+
+    const orphans = d
+      .query("SELECT id FROM games WHERE id NOT IN (SELECT game_id FROM player_games)")
+      .all() as { id: string }[];
+    const ids = orphans.map((r) => r.id);
+    let analysesRemoved = 0;
+    if (ids.length > 0) {
+      analysesRemoved = (d
+        .query(
+          `SELECT COUNT(*) AS n FROM analyses WHERE game_id IN (${ids.map(() => "?").join(",")})`,
+        )
+        .get(...ids) as { n: number }).n;
+      // analyses/analysis_moves/analysis_lines cascade from games
+      d.run(`DELETE FROM games WHERE id IN (${ids.map(() => "?").join(",")})`, ids);
+    }
+    return { removed: true, gamesRemoved: ids.length, analysesRemoved };
+  })();
 }

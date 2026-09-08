@@ -6,19 +6,19 @@ import {
 import { DEMO_GAME } from "./api/demo";
 import { fetchList, type PlayerList } from "./api/reviewDb";
 import { GameList } from "./components/GameList";
+import { PlayersView } from "./components/PlayersView";
 import { ReviewView } from "./components/ReviewView";
 import { SettingsView } from "./components/SettingsView";
-import { Spinner } from "./components/Spinner";
 import { StatsView } from "./components/StatsView";
 import { getEngine } from "./engine/engine";
 import { LANGS, I18nProvider, useI18n, type Lang, type TFn } from "./i18n";
-import { loadSettings, saveSettings, type Settings } from "./settings";
+import { clearLegacyUsername, legacyUsername, loadSettings, saveSettings, type Settings } from "./settings";
 
 interface ListData extends PlayerList {
   username: string;
 }
 
-type Screen = "settings" | "list" | "review" | "stats";
+type Screen = "users" | "list" | "review" | "stats" | "settings";
 
 function friendlyError(e: unknown, t: TFn): string {
   if (e instanceof UnknownPlayerError) return t("errorPlayerNotFound");
@@ -69,7 +69,7 @@ function AppInner({
 }) {
   const { t, lang } = useI18n();
   const [screen, setScreen] = useState<Screen>(() =>
-    new URLSearchParams(window.location.search).has("demo") ? "review" : "settings",
+    new URLSearchParams(window.location.search).has("demo") ? "review" : "users",
   );
   /** the fetched list lives at App level so it survives screen changes */
   const [list, setList] = useState<ListData | null>(null);
@@ -83,6 +83,8 @@ function AppInner({
   const [langOpen, setLangOpen] = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
+  /** single-player installs: seeded once into the Players grid, then cleared */
+  const [legacy, setLegacy] = useState(() => legacyUsername());
 
   useEffect(() => {
     // reset on (re)mount: StrictMode runs cleanup in dev, which would
@@ -159,7 +161,7 @@ function AppInner({
       } catch (e) {
         if (!mounted.current) return;
         setList(null);
-        setScreen("settings");
+        setScreen("users");
         setError(friendlyError(e, t));
       } finally {
         if (mounted.current) setBusy(false);
@@ -172,42 +174,10 @@ function AppInner({
     if (list) void retrieve(list.username, { useCache: false });
   }, [list, retrieve]);
 
-  /** Settings "← Games": use the in-memory list, or fetch it. */
-  const backToGames = useCallback(() => {
-    if (list && list.fetchedAt != null) {
-      setScreen("list");
-      return;
-    }
-    if (settings.username.trim()) {
-      void retrieve(settings.username, { useCache: true });
-    }
-  }, [list, settings.username, retrieve]);
-
-  // the stats view needs the game list - fetch it (cached) when entering,
-  // staying on the stats screen. Guarded so a failed fetch can't loop.
-  const statsFetchTried = useRef(false);
-  const prevScreenRef = useRef(screen);
-  useEffect(() => {
-    if (prevScreenRef.current !== "stats" && screen === "stats") statsFetchTried.current = false;
-    prevScreenRef.current = screen;
-    if (
-      screen === "stats" &&
-      !list &&
-      !statsFetchTried.current &&
-      settings.username.trim()
-    ) {
-      statsFetchTried.current = true;
-      void retrieve(settings.username, { useCache: true, screen: "stats" });
-    }
-  }, [screen, list, settings.username, retrieve]);
-
   const toSettings = useCallback(() => {
     setScreen("settings");
     setError(null);
   }, []);
-
-  const canGoToGames =
-    (list != null && list.fetchedAt != null) || settings.username.trim() !== "";
 
   const iconBtn =
     "rounded-md p-2 transition hover:bg-btn text-ink-mute hover:text-ink-soft";
@@ -315,15 +285,29 @@ function AppInner({
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1">
+        {screen === "users" && (
+          <>
+            {error && (
+              <div className="mb-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-500 ring-1 ring-red-500/30">
+                {error}
+              </div>
+            )}
+            <PlayersView
+              legacyUsername={legacy}
+              onOpen={(u) => void retrieve(u)}
+              onLegacySeeded={() => {
+                clearLegacyUsername();
+                setLegacy("");
+              }}
+            />
+          </>
+        )}
+
         {screen === "settings" && (
           <SettingsView
             settings={settings}
-            busy={busy}
-            error={error}
-            canGoToGames={canGoToGames}
-            onBack={backToGames}
+            onBack={() => setScreen("users")}
             onChange={updateSettings}
-            onRetrieve={(u) => void retrieve(u)}
             onDemo={() => openGame(DEMO_GAME)}
           />
         )}
@@ -337,7 +321,7 @@ function AppInner({
             fetchedAt={list.fetchedAt}
             onSelect={openGame}
             onRefresh={refreshList}
-            onBack={toSettings}
+            onBack={() => setScreen("users")}
           />
         )}
 
@@ -349,19 +333,15 @@ function AppInner({
               onBack={() => setScreen("list")}
               onOpenGame={openGame}
             />
-          ) : settings.username.trim() ? (
-            <div className="mx-auto mt-16 flex max-w-lg items-center justify-center gap-3 rounded-lg bg-card p-10 text-ink-mute ring-1 ring-line">
-              <Spinner className="h-5 w-5" /> {t("loadingGames")}
-            </div>
           ) : (
             <div className="mx-auto mt-16 max-w-lg text-center">
               <div className="rounded-lg bg-card p-8 ring-1 ring-line">
                 <p className="mb-4 text-sm text-ink-mute">{t("statsNeedUsername")}</p>
                 <button
-                  onClick={toSettings}
+                  onClick={() => setScreen("users")}
                   className="rounded-md bg-accent-strong px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-strong-hover"
                 >
-                  {t("goSettings")}
+                  {t("goPlayers")}
                 </button>
               </div>
             </div>
@@ -375,7 +355,7 @@ function AppInner({
             engineKind={settings.engine}
             threads={settings.threads}
             analysisMode={settings.analysis}
-            username={settings.username}
+            username={list?.username ?? ""}
             flip={settings.flip}
             onFlip={() => updateSettings({ flip: !settings.flip })}
             showArrow={settings.showArrow}

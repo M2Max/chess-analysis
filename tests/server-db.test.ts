@@ -8,12 +8,14 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  deletePlayer,
   getAnalysis,
   getGamesForPlayer,
   getStatsForPlayer,
   listIsFresh,
   listPlayers,
   saveAnalysisForGame,
+  savePlayerProfile,
   setDbPathForTests,
   upsertList,
   upsertPlayer,
@@ -249,5 +251,65 @@ describe("server/db - stats rows", () => {
       blackAcc: 76,
       opening: { eco: "C20", name: "King's Pawn Game", depth: 2 },
     });
+  });
+});
+
+describe("server/db - multi-user management (v2)", () => {
+  it("v2 profile columns round-trip through listPlayers", () => {
+    upsertPlayer("MultiA");
+    savePlayerProfile("MultiA", { title: "NM", blitz: 1234, rapid: 1111, classical: null, puzzles: 900 });
+    const p = listPlayers().find((x) => x.username === "MultiA")!;
+    expect(p.title).toBe("NM");
+    expect(p.ratings).toMatchObject({ blitz: 1234, rapid: 1111, puzzles: 900 });
+    expect(p.ratings.classical).toBeUndefined();
+    expect(p.ratingsUpdatedAt).not.toBeNull();
+    expect(p.lastGameUtc).toBeNull();
+    expect(p.lastFetchAt).toBeNull();
+  });
+
+  it("listPlayers exposes the newest game time per player", () => {
+    const id = upsertPlayer("TimeKeeper");
+    const g1 = game({ utc: 1_750_500_000 });
+    const g2 = game({ utc: 1_750_900_000 });
+    upsertList(id, [g1, g2], { fetchedAt: Date.now(), truncated: false, fromUtc: 0, toUtc: 2e9 });
+    const p = listPlayers().find((x) => x.username === "TimeKeeper")!;
+    expect(p.lastGameUtc).toBe(1_750_900_000);
+    expect(p.games).toBe(2);
+  });
+
+  it("deletePlayer wipes own games+analyses but keeps games shared with other tracked players", () => {
+    const id1 = upsertPlayer("Shared1");
+    const id2 = upsertPlayer("Shared2");
+    const own = game();
+    const shared = game();
+    upsertList(id1, [own, shared], { fetchedAt: Date.now(), truncated: false, fromUtc: 0, toUtc: 2e9 });
+    upsertList(id2, [shared], { fetchedAt: Date.now(), truncated: false, fromUtc: 0, toUtc: 2e9 });
+    expect(saveAnalysisForGame(own.id, entry("lite", "fast"))).toBe(true);
+    expect(saveAnalysisForGame(shared.id, entry("lite", "fast"))).toBe(true);
+
+    const res = deletePlayer("Shared1");
+    expect(res.removed).toBe(true);
+    expect(res.gamesRemoved).toBe(1); // only the exclusive game
+    expect(res.analysesRemoved).toBe(1);
+
+    expect(listPlayers().some((p) => p.username === "Shared1")).toBe(false);
+    expect(getAnalysis(own.id)).toBeNull(); // own analysis gone with the game
+    expect(getAnalysis(shared.id)).not.toBeNull(); // shared game + analysis survive
+    expect(getGamesForPlayer("Shared2")?.games.map((g) => g.id)).toEqual([shared.id]);
+  });
+
+  it("deletePlayer on an untracked name is a no-op", () => {
+    expect(deletePlayer("NeverWasHere")).toMatchObject({ removed: false });
+  });
+
+  it("re-adding a deleted player starts from a clean slate", () => {
+    const id = upsertPlayer("Comeback");
+    const g = game();
+    upsertList(id, [g], { fetchedAt: Date.now(), truncated: false, fromUtc: 0, toUtc: 2e9 });
+    deletePlayer("Comeback");
+    const id2 = upsertPlayer("Comeback");
+    const p = listPlayers().find((x) => x.username === "Comeback")!;
+    expect(p.games).toBe(0);
+    expect(id2).toBeGreaterThan(0);
   });
 });

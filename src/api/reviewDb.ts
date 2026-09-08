@@ -69,3 +69,56 @@ export async function listPlayers(): Promise<PlayerInfo[]> {
   if (!res.ok) throw new Error(`request failed (${res.status})`);
   return (await res.json()) as PlayerInfo[];
 }
+
+// ---- multi-user management ---------------------------------------------------
+
+/** One tracked player, as served by GET /api/db/players. */
+export interface PlayerCard {
+  username: string;
+  games: number;
+  analyzed: number;
+  lastFetchAt: number | null;
+  /** unix SECONDS of the newest stored game (null = none yet) */
+  lastGameUtc: number | null;
+  title: string | null;
+  ratings: { blitz?: number; rapid?: number; classical?: number; puzzles?: number };
+  ratingsUpdatedAt: number | null;
+}
+
+/** Thrown when chess.com has no such account (POST validation 422). */
+export class PlayerNotFoundError extends Error {
+  constructor() {
+    super("player not found");
+    this.name = "PlayerNotFoundError";
+  }
+}
+
+/**
+ * Tracked players. `refresh` asks the server to top up stale profile data
+ * (title/ratings) from chess.com before answering.
+ */
+export async function fetchPlayers(refresh = false): Promise<PlayerCard[]> {
+  const res = await fetch(`/api/db/players${refresh ? "?refresh=1" : ""}`);
+  if (!res.ok) throw new Error(`players request failed (${res.status})`);
+  return (await res.json()) as PlayerCard[];
+}
+
+/** Start tracking a player. Throws PlayerNotFoundError for unknown accounts. */
+export async function addPlayer(username: string): Promise<void> {
+  const res = await fetch("/api/db/players", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username }),
+  });
+  if (res.status === 422) throw new PlayerNotFoundError();
+  if (res.status === 400) throw new Error("invalid-username");
+  if (!res.ok) throw new Error(`add player failed (${res.status})`);
+}
+
+/** Stop tracking a player and delete their stored games/analyses. */
+export async function removePlayer(username: string): Promise<void> {
+  const res = await fetch(`/api/db/players/${encodeURIComponent(username.trim())}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`remove player failed (${res.status})`);
+}

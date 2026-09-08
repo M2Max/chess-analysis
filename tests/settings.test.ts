@@ -1,5 +1,12 @@
 import { describe, expect, test, beforeAll } from "bun:test";
-import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from "../src/settings";
+import {
+  DEFAULT_SETTINGS,
+  clearLegacyUsername,
+  legacyUsername,
+  loadSettings,
+  saveSettings,
+  type Settings,
+} from "../src/settings";
 
 const KEY = "chess-analysis.settings.v2";
 const LEGACY_KEY = "chesscom-review.settings.v1";
@@ -29,7 +36,6 @@ describe("settings persistence (localStorage)", () => {
   test("save → load round-trip", () => {
     reset();
     const s: Settings = {
-      username: "Mamox43",
       engine: "full",
       threads: 4,
       flip: true,
@@ -47,22 +53,8 @@ describe("settings persistence (localStorage)", () => {
     saveSettings({ ...DEFAULT_SETTINGS, analysis: "fast" });
     expect(loadSettings().analysis).toBe("fast");
     // partial object: missing analysis falls back to the default
-    localStorage.setItem(KEY, JSON.stringify({ username: "x" }));
+    localStorage.setItem(KEY, JSON.stringify({ engine: "full" }));
     expect(loadSettings().analysis).toBe("fast");
-  });
-
-  test("case is preserved (usernames are case sensitive)", () => {
-    reset();
-    saveSettings({
-      ...DEFAULT_SETTINGS,
-      username: "MiXeD",
-      engine: "lite",
-      threads: 0,
-      flip: false,
-      showArrow: true,
-      analysis: "fast",
-    });
-    expect(loadSettings().username).toBe("MiXeD");
   });
 
   test("corrupt JSON falls back to defaults", () => {
@@ -73,14 +65,14 @@ describe("settings persistence (localStorage)", () => {
 
   test("unknown engine value falls back to lite", () => {
     reset();
-    localStorage.setItem(KEY, JSON.stringify({ username: "x", engine: "quantum" }));
-    expect(loadSettings()).toEqual({ ...DEFAULT_SETTINGS, username: "x" });
+    localStorage.setItem(KEY, JSON.stringify({ engine: "quantum" }));
+    expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
   });
 
   test("partial object fills missing fields (showArrow defaults to true)", () => {
     reset();
-    localStorage.setItem(KEY, JSON.stringify({ username: "a" }));
-    expect(loadSettings()).toEqual({ ...DEFAULT_SETTINGS, username: "a" });
+    localStorage.setItem(KEY, JSON.stringify({ threads: 2 }));
+    expect(loadSettings()).toEqual({ ...DEFAULT_SETTINGS, threads: 2 });
   });
 
   test("legacy v1 key migrates to the current key", () => {
@@ -90,10 +82,32 @@ describe("settings persistence (localStorage)", () => {
       JSON.stringify({ username: "OldUser", engine: "full", analysis: "deep" }),
     );
     const s = loadSettings();
-    expect(s.username).toBe("OldUser");
     expect(s.engine).toBe("full");
     expect(s.analysis).toBe("deep");
     // the migrated value is persisted under the new key
     expect(backing.get(KEY)).toBeTruthy();
+  });
+});
+
+describe("legacy username (single-player → multi-user migration)", () => {
+  test("read from current storage, ignored once cleared", () => {
+    reset();
+    localStorage.setItem(KEY, JSON.stringify({ username: "Mamox43", engine: "lite" }));
+    expect(legacyUsername()).toBe("Mamox43");
+    clearLegacyUsername();
+    expect(legacyUsername()).toBe("");
+    // the rest of the settings survive the clear
+    expect(loadSettings().engine).toBe("lite");
+  });
+
+  test("falls back to the legacy v1 key", () => {
+    reset();
+    localStorage.setItem(LEGACY_KEY, JSON.stringify({ username: " OldUser " }));
+    expect(legacyUsername()).toBe("OldUser");
+  });
+
+  test("nothing stored → empty", () => {
+    reset();
+    expect(legacyUsername()).toBe("");
   });
 });

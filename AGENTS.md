@@ -5,11 +5,14 @@ before changing anything. Commands in `## Commands` are the fast path.
 
 ## What this is
 
-Game-review webapp: enter a player username, Stockfish 18 (WASM) analyses
-their last-30-days games **entirely in the browser** (move categories,
-accuracy, eval, top-3 lines, branching), plus a resumable stats run. The
-server is deliberately thin: SQLite + game retrieval + static serving - it
-never computes.
+Game-review webapp: track chess.com players on a multi-user grid (ratings,
+last-played, monogram avatars); for any tracked player Stockfish 18 (WASM)
+analyses their last-30-days games **entirely in the browser** (move
+categories, accuracy, eval, top-3 lines, branching), plus a resumable stats
+run. The server is deliberately thin: SQLite + game retrieval + static
+serving - it never computes. `settings.username` is gone - the tracked
+players live in the DB (`players` table), the Players grid is the home
+screen and `retrieve(username)` is the entry point.
 
 Stack: **Bun** (runtime, tests, scripts) · Vite + React 19 + TS (strict) +
 Tailwind 4 · react-chessboard + chess.js · Stockfish WASM (nmrugg npm pkg,
@@ -30,7 +33,7 @@ build-time) · bun:sqlite (WAL) · GitHub Actions → GHCR (amd64+arm64).
 ```sh
 bun run dev          # vite (LAN host) :5173   - dev server, hot reload
 bun server/index.ts  # data API :3000          - required alongside vite in dev
-bun test             # 214 tests, no browser/WASM needed
+bun test             # 235 tests, no browser/WASM needed
 npx tsc -b           # typecheck (part of `bun run build`)
 ```
 
@@ -144,4 +147,9 @@ test fixture.
 - Tests stub `localStorage` and `global fetch` (see `tests/` patterns);
   engine tests use a fake UCI worker, never real WASM.
 - Screenshots for README: `playwright-core` against `?demo` (no personal
-  data in published images).
+  data in published images); `scripts/shots.mjs` regenerates all four.
+- `DELETE /api/db/players/{u}` is destructive by design: cascades to games
+  no other tracked player references (+ their analyses). Games are SHARED
+  rows - test with two players and a common game before touching.
+- Profile enrichment (`GET players?refresh=1`) has a 10-min TTL per player;
+  forcing staleness in tests: `UPDATE players SET ratings_updated_at = 0`.
