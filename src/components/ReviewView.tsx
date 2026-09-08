@@ -645,7 +645,6 @@ export function ReviewView({
             nodes={state.line.map((idx) => state.nodes[idx])}
             cursor={state.cursor}
             onSelect={selectMove}
-            flipped={orientation === "black"}
           />
 
           <p className="mt-2 text-[11px] text-ink-faint">{t("dragHint")}</p>

@@ -8,8 +8,6 @@ interface Props {
   /** index into `nodes` of the displayed position */
   cursor: number;
   onSelect: (cursor: number) => void;
-  /** board seen from Black - the chart mirrors vertically */
-  flipped?: boolean;
 }
 
 /** cp at which the curve is ~saturated (tanh(2) ≈ 0.96) */
@@ -30,16 +28,17 @@ function whiteCp(node: AnalysisNode): number | null {
 }
 
 /** cp -> y coordinate (0 = top, 100 = bottom; White advantage goes UP) */
-function yOf(cp: number, flipped: boolean): number {
-  const y = 50 - 50 * Math.tanh(cp / SCALE_CP);
-  return flipped ? 100 - y : y;
+function yOf(cp: number): number {
+  return 50 - 50 * Math.tanh(cp / SCALE_CP);
 }
 
 /**
  * Chess.com-style advantage graph: White fills below the curve, Black above,
  * midline at 0. Grows live while the analysis runs; click to jump to a move.
+ * Orientation is FIXED - White's side is always the bottom half and colours
+ * always mean what they say, regardless of how the board is oriented.
  */
-export function EvalChart({ nodes, cursor, onSelect, flipped = false }: Props) {
+export function EvalChart({ nodes, cursor, onSelect }: Props) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -57,7 +56,7 @@ export function EvalChart({ nodes, cursor, onSelect, flipped = false }: Props) {
 
   const n = Math.max(nodes.length - 1, 1);
   const xLast = n;
-  const pairs = pts.map((p) => `${p.x},${yOf(p.cp, flipped).toFixed(2)}`);
+  const pairs = pts.map((p) => `${p.x},${yOf(p.cp).toFixed(2)}`);
   const line = pairs.join(" "); // polyline
   const curve = "M" + pairs.join(" L"); // path
   const firstX = pts[0]?.x ?? 0;
