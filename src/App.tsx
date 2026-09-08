@@ -174,6 +174,73 @@ function AppInner({
     if (list) void retrieve(list.username, { useCache: false });
   }, [list, retrieve]);
 
+  // --- browser history -----------------------------------------------------
+  // The "location" is derived from state: screen + active player + reviewed
+  // game. Programmatic navigation changes the key -> the effect pushes a
+  // history entry; the back button fires popstate and we restore state to
+  // match the popped key (expectKey makes the push effect skip that round
+  // trip so back never pushes forward again).
+  const lastKeyRef = useRef<string | null>(null);
+  const expectKeyRef = useRef("");
+  const locKey =
+    screen === "review"
+      ? `review||${reviewGame?.id ?? ""}`
+      : screen === "list"
+        ? `list|${list?.username ?? ""}|`
+        : screen === "stats"
+          ? `stats|${list?.username ?? ""}|`
+          : screen === "settings"
+            ? "settings||"
+            : "users||";
+
+  useEffect(() => {
+    if (lastKeyRef.current == null) {
+      // first paint owns the current entry (reload / deep link)
+      lastKeyRef.current = locKey;
+      window.history.replaceState({ k: locKey }, "");
+      return;
+    }
+    if (locKey === lastKeyRef.current) return;
+    lastKeyRef.current = locKey;
+    if (locKey === expectKeyRef.current) {
+      expectKeyRef.current = ""; // arrived here via the back/forward button
+      return;
+    }
+    window.history.pushState({ k: locKey }, "");
+  }, [locKey]);
+
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const k: string = (e.state as { k?: string } | null)?.k ?? "users||";
+      expectKeyRef.current = k;
+      const [scr, uname, gid] = k.split("|");
+      if (scr === "review" && gid) {
+        const g =
+          gid === DEMO_GAME.id ? DEMO_GAME : list?.games.find((x) => x.id === gid);
+        if (g) {
+          setReviewGame(g);
+          setReviewPly(null);
+          setScreen("review");
+        } else {
+          // the game is not in the current list anymore: closest anchor
+          setScreen("users");
+        }
+      } else if (scr === "list" && uname) {
+        if (list?.username === uname) setScreen("list");
+        else void retrieve(uname); // sets list+screen; key matches, no push
+      } else if (scr === "stats" && uname && list?.username === uname) {
+        setScreen("stats");
+      } else if (scr === "settings") {
+        setScreen("settings");
+      } else {
+        setScreen("users");
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [list, retrieve]);
+
+
   const toSettings = useCallback(() => {
     setScreen("settings");
     setError(null);

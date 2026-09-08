@@ -112,7 +112,6 @@ export interface PlayerSummary {
   name: string;
   title?: string;
   ratings: {
-    chess?: number;
     blitz?: number;
     rapid?: number;
     classical?: number;
@@ -121,15 +120,19 @@ export interface PlayerSummary {
   lastOnline?: number;
 }
 
-function ratingOf(json: Record<string, unknown>, key: string): number | undefined {
-  const block = json[key] as { rating?: number } | undefined;
-  return block && typeof block.rating === "number" ? block.rating : undefined;
+/** stats endpoint shape: { chess_blitz: { last: { rating } }, tactics: {...} } */
+function lastRating(stats: Record<string, unknown>, key: string): number | undefined {
+  const block = stats[key] as { last?: { rating?: number } } | null | undefined;
+  return block?.last?.rating;
 }
 
 /**
- * Full profile: title + per-time-class ratings + last-online.
- * Throws UnknownPlayerError on 404 (doubles as the "does this player
- * exist?" validation when adding a tracked player).
+ * Full profile: title + per-time-class ratings + last-online. Ratings live
+ * on the SEPARATE /stats endpoint (chess_blitz.last.rating etc.), the player
+ * object itself has none; stats failures degrade to empty ratings rather
+ * than failing the whole summary. The 404 on the player endpoint throws
+ * UnknownPlayerError (doubles as "does this account exist?" validation when
+ * adding a tracked player).
  */
 export async function fetchPlayerSummary(username: string): Promise<PlayerSummary> {
   const u = normalizeUsername(username);
@@ -143,16 +146,21 @@ export async function fetchPlayerSummary(username: string): Promise<PlayerSummar
     }
     throw e;
   }
+  let stats: Record<string, unknown> = {};
+  try {
+    stats = (await fetchJson(`${BASE}/player/${encodeURIComponent(u)}/stats`)) as Record<string, unknown>;
+  } catch {
+    /* ratings optional: the card shows dashes, everything else works */
+  }
   return {
     username: typeof json.username === "string" ? json.username : u,
     name: typeof json.name === "string" && json.name ? json.name : u,
     title: typeof json.title === "string" ? json.title : undefined,
     ratings: {
-      chess: ratingOf(json, "chess"),
-      blitz: ratingOf(json, "blitz"),
-      rapid: ratingOf(json, "rapid"),
-      classical: ratingOf(json, "classical"),
-      puzzles: ratingOf(json, "puzzles"),
+      blitz: lastRating(stats, "chess_blitz"),
+      rapid: lastRating(stats, "chess_rapid"),
+      classical: lastRating(stats, "chess_daily"),
+      puzzles: lastRating(stats, "tactics"),
     },
     lastOnline:
       typeof json.last_online === "number" ? json.last_online : undefined,

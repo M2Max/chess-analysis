@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Game } from "../api/games";
 import type { AnalysisMeta } from "../api/reviewDb";
-import { useI18n, type StrKey, type TFn } from "../i18n";
+import { hasString, useI18n, type StrKey, type TFn } from "../i18n";
 import { Spinner } from "./Spinner";
 
 interface Props {
@@ -27,8 +27,9 @@ export function timeControlLabel(g: { timeControl: string; timeClass?: string },
   if (!tc || tc === "casual") return t("tcCasual");
   if (tc === "correspondence") return t("tcCorrespondence");
   const cls = g.timeClass
-    ? (t(`tc${g.timeClass.charAt(0).toUpperCase()}${g.timeClass.slice(1)}` as StrKey) ??
-      g.timeClass.charAt(0).toUpperCase() + g.timeClass.slice(1))
+    ? hasString(`tc${g.timeClass.charAt(0).toUpperCase()}${g.timeClass.slice(1)}`)
+      ? t(`tc${g.timeClass.charAt(0).toUpperCase()}${g.timeClass.slice(1)}` as StrKey)
+      : g.timeClass.charAt(0).toUpperCase() + g.timeClass.slice(1)
     : null;
   const m = tc.match(/^(\d+)(?:\+(\d+))?$/);
   let ctrl: string;

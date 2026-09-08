@@ -2,6 +2,7 @@ import { describe, expect, test, afterAll } from "bun:test";
 import {
   filterLast30Days,
   fetchLast30DaysGames,
+  fetchPlayerSummary,
   fetchProfile,
   monthKeysForDate,
   normalizeGames,
@@ -146,6 +147,53 @@ describe("fetchProfile", () => {
   test("404 → UnknownPlayerError", async () => {
     mockFetch(async () => Response.json({ error: "Not found" }, { status: 404 }));
     await expect(fetchProfile("nosuchplayer123456")).rejects.toBeInstanceOf(UnknownPlayerError);
+  });
+});
+
+describe("fetchPlayerSummary", () => {
+  test("ratings come from the /stats endpoint (chess_blitz.last.rating…)", async () => {
+    mockFetch(async (url) => {
+      if (url === "https://api.chess.com/pub/player/nova") {
+        return Response.json({ username: "nova", name: "Nova", title: "FM", last_online: 5 });
+      }
+      if (url === "https://api.chess.com/pub/player/nova/stats") {
+        return Response.json({
+          chess_blitz: { last: { rating: 1500 } },
+          chess_daily: { last: { rating: 1400 } },
+          tactics: { last: { rating: 800 } },
+          fide: 0,
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const s = await fetchPlayerSummary("Nova");
+    expect(s).toMatchObject({
+      username: "nova",
+      name: "Nova",
+      title: "FM",
+      lastOnline: 5,
+      ratings: { blitz: 1500, classical: 1400, puzzles: 800 },
+    });
+    expect(s.ratings.rapid).toBeUndefined();
+  });
+
+  test("stats failure degrades to empty ratings, summary still resolves", async () => {
+    mockFetch(async (url) => {
+      if (url.endsWith("/stats")) return Response.json({ error: "boom" }, { status: 500 });
+      return Response.json({ username: "nova", name: "Nova" });
+    });
+    const s = await fetchPlayerSummary("nova");
+    expect(s.ratings).toEqual({
+      blitz: undefined,
+      rapid: undefined,
+      classical: undefined,
+      puzzles: undefined,
+    });
+  });
+
+  test("unknown account → UnknownPlayerError (validation path)", async () => {
+    mockFetch(async () => Response.json({ error: "Not found" }, { status: 404 }));
+    await expect(fetchPlayerSummary("ghosty")).rejects.toBeInstanceOf(UnknownPlayerError);
   });
 });
 

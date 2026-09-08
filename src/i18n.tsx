@@ -185,6 +185,8 @@ const STRINGS = {
   tcBlitz: { it: "Blitz", en: "Blitz" },
   tcRapid: { it: "Rapid", en: "Rapid" },
   tcClassical: { it: "Classiche", en: "Classical" },
+  tcUltraBullet: { it: "UltraBullet", en: "UltraBullet" },
+  tcDaily: { it: "Quotidiane", en: "Daily" },
   tcMin: { it: "min", en: "min" },
 
   // ── review ───────────────────────────────────────────────────────────────
@@ -520,6 +522,12 @@ export function tabIdKey(id: string): StrKey {
   if (id === "all") return "tabAll";
   if (id === "long") return "tabLong";
   return `tc${id.charAt(0).toUpperCase()}${id.slice(1)}` as StrKey;
+}
+
+/** True when `key` exists in the dictionary: use before t() with keys
+ * derived at runtime (time-class labels), where a fallback is intended. */
+export function hasString(key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(STRINGS, key);
 }
 
 export function translate(lang: Lang, key: StrKey, vars?: Record<string, string | number>): string {

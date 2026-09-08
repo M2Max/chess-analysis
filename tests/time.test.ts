@@ -97,6 +97,17 @@ describe("timeControlLabel", () => {
     expect(timeControlLabel({ timeControl: "correspondence" }, t)).toBe("Correspondence");
   });
 
+  test("known and unknown time_class values never crash", () => {
+    // tcUltraBullet exists in the dictionary
+    expect(timeControlLabel({ timeControl: "3+2", timeClass: "ultraBullet" }, t)).toBe(
+      "UltraBullet 3+2",
+    );
+    // a class we have no key for falls back to the prettified raw value
+    expect(timeControlLabel({ timeControl: "3+2", timeClass: "telepathy" }, t)).toBe(
+      "Telepathy 3+2",
+    );
+  });
+
   test("derives the class from seconds when time_class is missing", () => {
     expect(timeControlLabel({ timeControl: "30" }, t)).toBe("Bullet 30 s");
     expect(timeControlLabel({ timeControl: "180" }, t)).toBe("Blitz 3 min");

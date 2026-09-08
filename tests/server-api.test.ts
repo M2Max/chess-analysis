@@ -61,6 +61,15 @@ beforeAll(() => {
         ],
       });
     }
+    const stats = url.match(/^https:\/\/api\.chess\.com\/pub\/player\/([a-z0-9_]+)\/stats$/);
+    if (stats) {
+      return Response.json({
+        chess_blitz: { last: { rating: 1234 } },
+        chess_rapid: { last: { rating: 1100 } },
+        chess_daily: { last: { rating: 1050 } },
+        tactics: { last: { rating: 900 } },
+      });
+    }
     const profile = url.match(/^https:\/\/api\.chess\.com\/pub\/player\/([a-z0-9_]+)$/);
     if (profile) {
       const name = profile[1];
@@ -72,10 +81,6 @@ beforeAll(() => {
         name: name,
         title: "NM",
         last_online: 1,
-        blitz: { rating: 1234 },
-        rapid: { rating: 1100 },
-        classical: { rating: 1050 },
-        puzzles: { rating: 900 },
       });
     }
     if (url.startsWith("https://api.chess.com/pub/player/ghost/")) {
