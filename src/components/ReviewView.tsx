@@ -118,7 +118,7 @@ export function ReviewView({
     const clocks = parseClocks(game.pgn);
     const spentSecs =
       clocks.remaining.length > 0
-        ? clocks.spent.map((s, i) => (s > 0 && i < clocks.remaining.length ? s : null))
+        ? clocks.spent.map((s, i) => (i < clocks.remaining.length ? s : null))
         : null;
 
     const { nodes, mainline } = buildMainline(parsed, spentSecs);
@@ -472,7 +472,7 @@ export function ReviewView({
   return (
     <div ref={rootRef}>
       {/* header */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 lg:mb-4">
         <button
           onClick={onBack}
           className="rounded-md px-2 py-1 text-sm text-ink-mute transition hover:bg-btn hover:text-ink-soft"
@@ -495,6 +495,28 @@ export function ReviewView({
             {opening.name} <span className="text-ink-faint">{opening.eco}</span>
           </span>
         )}
+        {/* mobile: compact players + accuracy next to the result/opening, so
+            the full card below the board can go away (vertical space) */}
+        <div className="ml-auto flex flex-col items-end gap-0.5 text-[11px] leading-tight lg:hidden">
+          {(["w", "b"] as const).map((c) => {
+            const p = c === "w" ? meta.white : meta.black;
+            const acc = c === "w" ? whiteAcc : blackAcc;
+            return (
+              <span key={c} className="flex min-w-0 items-center gap-1.5">
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                    c === "w" ? "bg-neutral-100 ring-1 ring-neutral-400" : "bg-neutral-950 ring-1 ring-neutral-500"
+                  }`}
+                />
+                <span className="max-w-[46vw] truncate text-ink-soft">
+                  {p.name}
+                  {p.rating != null && <span className="text-ink-faint"> ({p.rating})</span>}
+                </span>
+                <span className="font-mono text-ink-soft">{acc.value != null ? `${acc.value}%` : "…"}</span>
+              </span>
+            );
+          })}
+        </div>
       </div>
 
       {/* grid-cols-1 (minmax(0,1fr)) on mobile: without an explicit template the
@@ -656,7 +678,8 @@ export function ReviewView({
             onSelect={selectMove}
           />
 
-          <p className="mt-2 text-[11px] text-ink-faint">{t("dragHint")}</p>
+          {/* desktop-only hint (mobile saves the vertical space) */}
+          <p className="mt-2 hidden text-[11px] text-ink-faint lg:block">{t("dragHint")}</p>
         </div>
 
         {/* right: best lines (desktop) + players + moves */}
@@ -665,7 +688,9 @@ export function ReviewView({
           <div className="hidden lg:block">
             <TopLines fen={curNode.fen} stm={stm} multi={curNode.multi} />
           </div>
-          <div className="rounded-lg bg-card p-4 ring-1 ring-line">
+          {/* players + accuracy card (desktop; mobile has the compact header
+              version next to the result) */}
+          <div className="hidden rounded-lg bg-card p-4 ring-1 ring-line lg:block">
             {(["w", "b"] as const).map((c) => {
               const p = c === "w" ? meta.white : meta.black;
               const acc = c === "w" ? whiteAcc : blackAcc;
@@ -694,7 +719,7 @@ export function ReviewView({
             })}
           </div>
 
-          {/* mobile: best lines below the players/accuracy card */}
+          {/* mobile: best lines below the board */}
           <div className="lg:hidden">
             <TopLines fen={curNode.fen} stm={stm} multi={curNode.multi} />
           </div>

@@ -26,8 +26,9 @@ export function parseClks(pgn: string): number[] {
   const out: number[] = [];
   for (const m of pgn.matchAll(/%clk\s+(\d+):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/g)) {
     const [, h, mm, ss, frac] = m;
-    const seconds = ss != null ? Number(h) * 3600 + Number(mm) * 60 + Number(ss) : Number(h) * 60 + Number(mm) + (frac ? Number(`0.${frac}`) : 0);
-    out.push(seconds);
+    const base = ss != null ? Number(h) * 3600 + Number(mm) * 60 + Number(ss) : Number(h) * 60 + Number(mm);
+    // chess.com writes fractional seconds ("0:02:59.6") - keep them
+    out.push(base + (frac ? Number(`0.${frac}`) : 0));
   }
   return out;
 }
@@ -53,10 +54,14 @@ export function parseClocks(pgn: string): Clocks {
   const initial = parseInitial(pgn);
   const spent: number[] = [];
   for (let i = 0; i < rem.length; i++) {
-    const before = i === 0 ? initial : rem[i - 1];
-    // clk is recorded after the increment is added -> give it back
-    const s = before - rem[i] + increment;
-    spent.push(s > 0 && s < before + increment + 1 ? s : 0);
+    // Every [%clk] is the clock of the player who JUST moved, measured
+    // AFTER the increment was added - so thinking time is simply the drop
+    // from that SAME player's previous move (two plies back); no increment
+    // needed (chess.com sometimes omits it from the TimeControl header).
+    // Only each side's first move uses the header (initial + increment).
+    const beforeOwn = i < 2 ? initial + increment : rem[i - 2];
+    const s = beforeOwn - rem[i];
+    spent.push(s >= 0 && s < beforeOwn + 1 ? Math.round(s) : 0);
   }
   return { initial, spent, remaining: rem, increment };
 }

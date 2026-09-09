@@ -12,10 +12,25 @@ describe("pgnMeta clocks", () => {
     expect(parseInitial(PGN)).toBe(180);
     const c = parseClocks(PGN);
     expect(c.remaining.length).toBe(4);
-    expect(c.remaining[0]).toBe(179); // fractional seconds are dropped
-    // spent = before - after + increment (2)
-    expect(c.spent[0]).toBe(3); // 180 - 179 + 2
-    expect(c.spent[1]).toBe(3); // 179 - 178 + 2
+    expect(c.remaining[0]).toBeCloseTo(179.7, 1); // fractional seconds kept
+    // each clk is the clock of the player who just moved (after increment),
+    // so spent = that player's previous clk - this one
+    expect(c.spent[0]).toBe(2); // 180 + 2 - 179.7 = 2.3
+    expect(c.spent[1]).toBe(3); // 180 + 2 - 178.6 = 3.4
+    expect(c.spent[2]).toBe(2); // 179.7 - 177.9 = 1.8 (White, 2 plies back)
+    expect(c.spent[3]).toBe(2); // 178.6 - 177.0 = 1.6 (Black)
+  });
+
+  test("chess.com export: fractional clocks, increment missing from header", () => {
+    // real 3+2 export: TimeControl "180" (no +2!) and 0:02:59.6 clks.
+    // Deltas from the same player's previous move are still exact.
+    const pgn = `[TimeControl "180"]
+1. e4 {[%clk 0:02:59.6]} e5 {[%clk 0:02:58.6]} 2. Nf3 {[%clk 0:02:59.1]} Nc6 {[%clk 0:02:57.1]} *`;
+    const c = parseClocks(pgn);
+    expect(c.increment).toBe(0); // header lost it
+    expect(c.spent[0]).toBe(0); // 180 - 179.6 = 0.4 (off by the unknown +2)
+    expect(c.spent[2]).toBe(1); // 179.6 - 179.1 = 0.5 -> 1s, still visible
+    expect(c.spent[3]).toBe(2); // 178.6 - 177.1 = 1.5 -> 2s
   });
 
   test("no clocks -> empty arrays, no crash", () => {
