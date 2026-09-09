@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { categoryColorClass, hasSymbol } from "../engine/classify";
 import { useI18n } from "../i18n";
 import { CategorySymbol } from "./CategorySymbol";
+import { formatThinkingTime } from "./thinkTime";
 import type { ReviewState } from "../state/review";
 
 interface Props {
@@ -177,11 +178,13 @@ export function MoveStrip({ state, onSelectMove }: Props) {
                   )}
                   {!node.isMainline && <span className="text-[9px] text-branch/70">◦</span>}
                 </span>
+                {/* footer: thinking time when the PGN has clocks, else the
+                    move number; spinner while this position is evaluated */}
                 <span className="text-[10px] tabular-nums text-ink-faint">
                   {node.thinking ? (
                     <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-ink-faint border-t-transparent align-middle" />
                   ) : (
-                    i + 1
+                    formatThinkingTime(node.spentSec) || i + 1
                   )}
                 </span>
               </div>

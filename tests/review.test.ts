@@ -391,3 +391,25 @@ describe("resultLabel", () => {
     expect(resultLabel("0-0", "W", "B", t)).toBe("In progress");
   });
 });
+
+describe("buildMainline thinking time", () => {
+  test("attaches spent seconds per ply; start and gaps are null", () => {
+    const { nodes } = buildMainline(fakeParsed, [12, 75]);
+    expect(nodes[0].spentSec).toBeNull(); // start position
+    expect(nodes[1].spentSec).toBe(12); // e4
+    expect(nodes[2].spentSec).toBe(75); // e5
+  });
+  test("missing clocks → all null (and RESET_ANALYSIS keeps them)", () => {
+    const { nodes, mainline } = buildMainline(fakeParsed);
+    expect(nodes[1].spentSec).toBeNull();
+    const state = reviewReducer(initialReviewState, {
+      type: "INIT",
+      gen: 1,
+      meta: { white: { name: "W", username: "w" }, black: { name: "B", username: "b" }, result: "*", dateLabel: "" },
+      nodes,
+      mainline,
+    });
+    const reset = reviewReducer(state, { type: "RESET_ANALYSIS", gen: 2 });
+    expect(reset.nodes[1]?.spentSec).toBeNull();
+  });
+});

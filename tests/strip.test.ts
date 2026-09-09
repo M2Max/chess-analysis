@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { CELL, PITCH, stripTransform } from "../src/components/MoveStrip";
 
 const W = 390; // iPhone-like width
@@ -65,4 +65,25 @@ test("390px screen: window shows 5 moves (center + 2 + 2)", () => {
   const t = stripTransform(W, 20, 10);
   expect(visible(t, 20)).toHaveLength(5);
   expect(visible(t, 20)).toContain(10);
+});
+
+import { formatThinkingTime } from "../src/components/thinkTime";
+
+describe("formatThinkingTime", () => {
+  test("under a minute: Xs", () => {
+    expect(formatThinkingTime(0)).toBe("0s");
+    expect(formatThinkingTime(7)).toBe("7s");
+    expect(formatThinkingTime(59)).toBe("59s");
+  });
+  test("a minute or more: XmXs (seconds zero-padded)", () => {
+    expect(formatThinkingTime(60)).toBe("1m00s");
+    expect(formatThinkingTime(65)).toBe("1m05s");
+    expect(formatThinkingTime(127)).toBe("2m07s");
+    expect(formatThinkingTime(600)).toBe("10m00s");
+  });
+  test("unknown → empty string (UI hides it)", () => {
+    expect(formatThinkingTime(null)).toBe("");
+    expect(formatThinkingTime(undefined)).toBe("");
+    expect(formatThinkingTime(-1)).toBe("");
+  });
 });

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { categoryColorClass, hasSymbol } from "../engine/classify";
 import { useI18n } from "../i18n";
 import { CategorySymbol } from "./CategorySymbol";
+import { formatThinkingTime } from "./thinkTime";
 import type { ReviewState } from "../state/review";
 
 interface Props {
@@ -40,6 +41,7 @@ export function MoveList({ state, onSelectMove }: Props) {
   const cell = (m: { n: number; idx: number }) => {
     const node = state.nodes[m.idx];
     const isCurrent = state.cursor === m.n;
+    const think = formatThinkingTime(node.spentSec);
     return (
       <button
         key={m.idx}
@@ -63,6 +65,9 @@ export function MoveList({ state, onSelectMove }: Props) {
           <span className={`text-xs font-bold ${categoryColorClass(node.category)}`}>
             <CategorySymbol category={node.category} />
           </span>
+        )}
+        {think && (
+          <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{think}</span>
         )}
         {node.thinking && (
           <span className="h-3 w-3 shrink-0 animate-spin rounded-full border border-ink-faint border-t-transparent" />

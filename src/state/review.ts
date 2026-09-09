@@ -32,6 +32,11 @@ export interface AnalysisNode {
   isMainline: boolean;
   /** the move leading INTO this node (null for the start position) */
   move: NodeMove | null;
+  /**
+   * Seconds the player spent on this move (from the PGN's per-move [%clk]
+   * comments); null when unknown - and always for analysis branches.
+   */
+  spentSec: number | null;
   // analysis (null until analysed)
   score: Score | null;
   bestUci: string | null;
@@ -156,8 +161,15 @@ export const initialReviewState: ReviewState = {
   error: null,
 };
 
-/** Build the mainline node chain from a parsed game. */
-export function buildMainline(parsed: ParsedGame): {
+/**
+ * Build the mainline node chain from a parsed game. `spentSecs` (optional,
+ * indexed like parsed.moves) attaches the per-move thinking time from the
+ * PGN clocks so the UI can show it next to each move.
+ */
+export function buildMainline(
+  parsed: ParsedGame,
+  spentSecs?: (number | null)[] | null,
+): {
   nodes: AnalysisNode[];
   mainline: number[];
 } {
@@ -182,6 +194,7 @@ export function buildMainline(parsed: ParsedGame): {
     depthFromStart: 0,
     isMainline: true,
     move: null,
+    spentSec: null,
     ...empty,
   };
   nodes.push(start);
@@ -195,6 +208,7 @@ export function buildMainline(parsed: ParsedGame): {
       depthFromStart: i + 1,
       isMainline: true,
       move: { san: m.san, uci: m.uci, color: m.color },
+      spentSec: spentSecs?.[i] ?? null,
       ...empty,
     });
     mainline.push(idx);
@@ -376,6 +390,7 @@ export function reviewReducer(state: ReviewState, action: Action): ReviewState {
           depthFromStart: parent.depthFromStart + 1,
           isMainline: false,
           move: action.move,
+          spentSec: null,
           ...{
             score: null,
             bestUci: null,

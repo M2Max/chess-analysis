@@ -6,6 +6,7 @@ import { ANALYSIS_MODES, type AnalysisMode, type EngineKind } from "../engine/co
 import { analyzeGame, terminalResult, type PositionResult } from "../engine/analysis";
 import { accuracyFromMoves, formatEval, multipvToMultiLines, type Category } from "../engine/classify";
 import { parsePgn, uciToSan, type ParsedGame } from "../engine/parse";
+import { parseClocks } from "../stats/pgnMeta";
 import { getEngine } from "../engine/engine";
 import {
   accuracyFor,
@@ -112,7 +113,15 @@ export function ReviewView({
       return;
     }
 
-    const { nodes, mainline } = buildMainline(parsed);
+    // per-move thinking time from [%clk] comments (null when the PGN has
+    // no clocks; 0/unknown entries collapse to null so the UI hides them)
+    const clocks = parseClocks(game.pgn);
+    const spentSecs =
+      clocks.remaining.length > 0
+        ? clocks.spent.map((s, i) => (s > 0 && i < clocks.remaining.length ? s : null))
+        : null;
+
+    const { nodes, mainline } = buildMainline(parsed, spentSecs);
     const meta: ReviewMeta = {
       white: { name: game.white.name, username: game.white.username, rating: game.white.rating },
       black: { name: game.black.name, username: game.black.username, rating: game.black.rating },
