@@ -558,33 +558,25 @@ export function ReviewView({
 
   return (
     <div ref={rootRef}>
-      {/* header */}
-      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 lg:mb-4">
-        <button
-          onClick={onBack}
-          className="rounded-md px-2 py-1 text-sm text-ink-mute transition hover:bg-btn hover:text-ink-soft"
-        >
-          {t("backToGames")}
-        </button>
-        <h1 className="text-base font-semibold text-ink">
-          {resultLabel(meta.result, meta.white.name, meta.black.name, t)}
-        </h1>
-        <span className="text-xs text-ink-faint">
-          {meta.dateLabel}
-          {meta.timeControl && ` · ${meta.timeControl}`}
-        </span>
-        {opening && (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/15 px-2 py-1 text-xs text-cat-opening ring-1 ring-amber-500/40"
-            title={t("openingBookTitle", { eco: opening.eco, moves: Math.ceil(opening.depth / 2) })}
+      {/* header - two rows: (back · "USER wins" title · players/accuracy
+          chips top-aligned on the right) then date + opening. Keeping the
+          chips in the title row guarantees they start at the title's height
+          even with long names (the title truncates instead of pushing them
+          to a second line). */}
+      <div className="mb-2 lg:mb-4">
+        <div className="flex items-start gap-x-2">
+          <button
+            onClick={onBack}
+            className="rounded-md px-2 py-1 text-sm text-ink-mute transition hover:bg-btn hover:text-ink-soft"
           >
-            <CategorySymbol category="opening" />
-            {opening.name} <span className="text-ink-faint">{opening.eco}</span>
-          </span>
-        )}
-        {/* mobile: compact players + accuracy next to the result/opening, so
-            the full card below the board can go away (vertical space) */}
-        <div className="ml-auto flex flex-col items-end gap-0.5 text-[11px] leading-tight lg:hidden">
+            {t("backToGames")}
+          </button>
+          <h1 className="min-w-0 flex-1 truncate pt-1 text-base font-semibold leading-tight text-ink">
+            {resultLabel(meta.result, meta.white.name, meta.black.name, t)}
+          </h1>
+          {/* mobile: compact players + accuracy next to the result, so the
+              full card below the board can go away (vertical space) */}
+          <div className="ml-auto flex shrink-0 flex-col items-end gap-0.5 pt-0.5 text-[11px] leading-tight lg:hidden">
           {(["w", "b"] as const).map((c) => {
             const p = c === "w" ? meta.white : meta.black;
             const acc = c === "w" ? whiteAcc : blackAcc;
@@ -603,6 +595,22 @@ export function ReviewView({
               </span>
             );
           })}
+          </div>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-xs text-ink-faint">
+            {meta.dateLabel}
+            {meta.timeControl && ` · ${meta.timeControl}`}
+          </span>
+          {opening && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/15 px-2 py-1 text-xs text-cat-opening ring-1 ring-amber-500/40"
+              title={t("openingBookTitle", { eco: opening.eco, moves: Math.ceil(opening.depth / 2) })}
+            >
+              <CategorySymbol category="opening" />
+              {opening.name} <span className="text-ink-faint">{opening.eco}</span>
+            </span>
+          )}
         </div>
       </div>
 
