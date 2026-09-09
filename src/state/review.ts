@@ -133,6 +133,7 @@ export type Action =
   | { type: "GO_MAINLINE" }
   | { type: "SET_LINE"; line: number[]; cursor: number }
   | { type: "BRANCH_START"; parentIdx: number; move: NodeMove; fen: string }
+  | { type: "PV_BRANCH"; parentIdx: number; navIdxs: number[]; moves: (NodeMove & { fen: string })[] }
   | { type: "BRANCH_INFO"; gen: number; nodeIdx: number; score: Score; pv: string[]; depth: number }
   | {
       type: "BRANCH_DONE";
@@ -371,6 +372,44 @@ export function reviewReducer(state: ReviewState, action: Action): ReviewState {
         line: action.line,
         cursor: clampCursor({ ...state, line: action.line }, action.cursor),
       };
+    }
+
+    case "PV_BRANCH": {
+      // play a prefix of an engine best-line: navIdxs are already-existing
+      // child nodes (navigate), moves are new branch nodes appended in
+      // order; only the LAST one is "thinking" (it gets the immediate
+      // branch evaluation, exactly like a drag onto an empty square)
+      const parent = state.nodes[action.parentIdx];
+      if (!parent || action.moves.length === 0) return state;
+      const nodes = state.nodes.slice();
+      let parentIdx = action.parentIdx;
+      const idxs: number[] = [];
+      action.moves.forEach((mv, i) => {
+        const idx = nodes.length;
+        nodes.push({
+          idx,
+          parent: parentIdx,
+          fen: mv.fen,
+          depthFromStart: nodes[parentIdx].depthFromStart + 1,
+          isMainline: false,
+          move: { san: mv.san, uci: mv.uci, color: mv.color },
+          spentSec: null,
+          score: null,
+          bestUci: null,
+          bestSan: null,
+          pv: [],
+          achievedDepth: null,
+          multi: [],
+          category: null,
+          loss: null,
+          delta: null,
+          thinking: i === action.moves.length - 1,
+        });
+        idxs.push(idx);
+        parentIdx = idx;
+      });
+      const line = [...state.line.slice(0, state.cursor + 1), ...action.navIdxs, ...idxs];
+      return { ...state, nodes, line, cursor: line.length - 1 };
     }
 
     case "BRANCH_START": {

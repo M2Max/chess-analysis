@@ -14,6 +14,7 @@ import {
   initialReviewState,
   resultLabel,
   reviewReducer,
+  type NodeMove,
   type ReviewMeta,
 } from "../state/review";
 import { comboRank, fetchAnalysis, putAnalysis, type CachedMove } from "../api/analysisCache";
@@ -418,6 +419,92 @@ export function ReviewView({
     [engineKind, threads],
   );
 
+  /**
+   * Play the first `count` moves of an engine best line from the current
+   * position (clicking a move in TopLines). Moves that already exist as
+   * children are just navigated; the rest become a branch analysed right
+   * away - same flow (and "back to game" button) as dragging a move.
+   */
+  const playPv = useCallback(
+    (pv: string[], count: number) => {
+      const st = stateRef.current;
+      let parentIdx = st.line[st.cursor];
+      if (parentIdx == null) return;
+      let node = st.nodes[parentIdx];
+      if (!node) return;
+
+      // consume the prefix that already exists as a chain of children
+      const navIdxs: number[] = [];
+      for (const uci of pv.slice(0, count)) {
+        const child = st.nodes.find((n) => n.parent === parentIdx && n.move?.uci === uci);
+        if (!child) break;
+        navIdxs.push(child.idx);
+        parentIdx = child.idx;
+        node = child;
+      }
+      const remaining = pv.slice(navIdxs.length, count);
+      if (!remaining.length) {
+        if (navIdxs.length) {
+          dispatch({
+            type: "SET_LINE",
+            line: [...st.line.slice(0, st.cursor + 1), ...navIdxs],
+            cursor: st.cursor + navIdxs.length,
+          });
+        }
+        return;
+      }
+
+      // validate + collect the new branch moves (chess.js, like the drag)
+      const chess = new Chess(node.fen);
+      const moves: (NodeMove & { fen: string })[] = [];
+      for (const uci of remaining) {
+        try {
+          const mv = chess.move({
+            from: uci.slice(0, 2),
+            to: uci.slice(2, 4),
+            promotion: uci.slice(4, 5) || undefined,
+          });
+          moves.push({ san: mv.san, uci, color: mv.color, fen: chess.fen() });
+        } catch {
+          break; // stop at the first illegal move (stale multipv etc.)
+        }
+      }
+      if (!moves.length) return;
+
+      const gen = st.gen;
+      const lastIdx = st.nodes.length + moves.length - 1;
+      dispatch({ type: "PV_BRANCH", parentIdx, navIdxs, moves });
+
+      // analyse the final position immediately (identical to drag-branch)
+      const fen = moves[moves.length - 1].fen;
+      void (async () => {
+        try {
+          const engine = getEngine(engineKind, threads);
+          const res = await engine.analyze(
+            fen,
+            { movetimeMs: ANALYSIS_MODES[analysisMode].branch[engine.variant] },
+            (info) =>
+              dispatch({ type: "BRANCH_INFO", gen, nodeIdx: lastIdx, score: info.score, pv: info.pv, depth: info.depth }),
+          );
+          dispatch({
+            type: "BRANCH_DONE",
+            gen,
+            nodeIdx: lastIdx,
+            score: res.info?.score ?? terminalResult(fen, res.bestMove)?.score ?? null,
+            bestUci: res.bestMove,
+            bestSan: res.info ? uciToSan(fen, res.bestMove) ?? null : null,
+            pv: res.info?.pv ?? [],
+            depth: res.info?.depth ?? 0,
+            multi: multipvToMultiLines(res.multipv),
+          });
+        } catch {
+          dispatch({ type: "BRANCH_FAIL", gen, nodeIdx: lastIdx });
+        }
+      })();
+    },
+    [engineKind, threads],
+  );
+
   // board orientation: the side the reviewed player played, optionally flipped
   const orientation: "white" | "black" = useMemo(() => {
     const u = username.trim().toLowerCase();
@@ -686,7 +773,7 @@ export function ReviewView({
         <div className="space-y-4">
           {/* desktop: best lines above the players/accuracy card */}
           <div className="hidden lg:block">
-            <TopLines fen={curNode.fen} stm={stm} multi={curNode.multi} />
+            <TopLines fen={curNode.fen} stm={stm} multi={curNode.multi} onPlay={playPv} />
           </div>
           {/* players + accuracy card (desktop; mobile has the compact header
               version next to the result) */}
@@ -721,7 +808,7 @@ export function ReviewView({
 
           {/* mobile: best lines below the board */}
           <div className="lg:hidden">
-            <TopLines fen={curNode.fen} stm={stm} multi={curNode.multi} />
+            <TopLines fen={curNode.fen} stm={stm} multi={curNode.multi} onPlay={playPv} />
           </div>
 
           <MoveList state={state} onSelectMove={selectMove} />

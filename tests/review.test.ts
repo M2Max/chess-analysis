@@ -413,3 +413,54 @@ describe("buildMainline thinking time", () => {
     expect(reset.nodes[1]?.spentSec).toBeNull();
   });
 });
+
+describe("PV_BRANCH (clicking a best line)", () => {
+  const fullLine = (s: ReviewState) =>
+    reviewReducer(s, { type: "SET_LINE", line: s.mainline, cursor: s.mainline.length - 1 });
+
+  test("appends branch nodes in order; only the last is thinking; lands there", () => {
+    let s = fullLine(initState());
+    const parentIdx = s.line[s.cursor];
+    const before = s.nodes.length;
+    s = reviewReducer(s, {
+      type: "PV_BRANCH",
+      parentIdx,
+      navIdxs: [],
+      moves: [
+        { san: "Qh5", uci: "d1h5", color: "w", fen: "FEN1" },
+        { san: "e6", uci: "e7e6", color: "b", fen: "FEN2" },
+      ],
+    });
+    expect(s.nodes.length).toBe(before + 2);
+    const [a, b] = [s.nodes[before], s.nodes[before + 1]];
+    expect(a.parent).toBe(parentIdx);
+    expect(b.parent).toBe(before);
+    expect(a.isMainline).toBe(false);
+    expect(a.thinking).toBe(false);
+    expect(b.thinking).toBe(true); // only the final position gets analysed
+    expect(a.fen).toBe("FEN1");
+    expect(b.fen).toBe("FEN2");
+    expect(s.line.slice(-2)).toEqual([before, before + 1]);
+    expect(s.cursor).toBe(s.line.length - 1);
+  });
+
+  test("navIdxs (existing children) are walked without creating nodes", () => {
+    let s = fullLine(initState()); // line = start, e4, e5
+    const childIdx = s.mainline[1]; // pretend "e4" is ahead of the cursor
+    s = reviewReducer({ ...s, cursor: 0 }, {
+      type: "PV_BRANCH",
+      parentIdx: 0,
+      navIdxs: [childIdx],
+      moves: [{ san: "Qh5", uci: "d1h5", color: "w", fen: "FEN1" }],
+    });
+    expect(s.nodes.length).toBe(4); // no extra nodes beyond the new move
+    expect(s.line).toEqual([0, childIdx, 3]);
+    expect(s.cursor).toBe(2);
+  });
+
+  test("empty moves is a no-op", () => {
+    const s = fullLine(initState());
+    const t = reviewReducer(s, { type: "PV_BRANCH", parentIdx: 0, navIdxs: [1], moves: [] });
+    expect(t).toBe(s);
+  });
+});

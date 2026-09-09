@@ -238,6 +238,7 @@ const STRINGS = {
   },
   bestLines: { it: "Migliori linee", en: "Best lines" },
   bestLinesWaiting: { it: "in attesa della valutazione…", en: "waiting for evaluation…" },
+  pvPlayTitle: { it: "Gioca le mosse fino a {san}", en: "Play the moves up to {san}" },
   engineMove: {
     it: "Motore: {san}{depth}",
     en: "Engine: {san}{depth}",
