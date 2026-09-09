@@ -10,6 +10,7 @@ import { PlayersView } from "./components/PlayersView";
 import { ReviewView } from "./components/ReviewView";
 import { SettingsView } from "./components/SettingsView";
 import { StatsView } from "./components/StatsView";
+import { PuzzleView } from "./components/PuzzleView";
 import { getEngine } from "./engine/engine";
 import { LANGS, I18nProvider, useI18n, type Lang, type TFn } from "./i18n";
 import { clearLegacyUsername, legacyUsername, loadSettings, saveSettings, type Settings } from "./settings";
@@ -18,7 +19,7 @@ interface ListData extends PlayerList {
   username: string;
 }
 
-type Screen = "users" | "list" | "review" | "stats" | "settings";
+type Screen = "users" | "list" | "review" | "stats" | "puzzles" | "settings";
 
 function friendlyError(e: unknown, t: TFn): string {
   if (e instanceof UnknownPlayerError) return t("errorPlayerNotFound");
@@ -189,9 +190,11 @@ function AppInner({
         ? `list|${list?.username ?? ""}|`
         : screen === "stats"
           ? `stats|${list?.username ?? ""}|`
-          : screen === "settings"
-            ? "settings||"
-            : "users||";
+          : screen === "puzzles"
+            ? `puzzles|${list?.username ?? ""}|`
+            : screen === "settings"
+              ? "settings||"
+              : "users||";
 
   useEffect(() => {
     if (lastKeyRef.current == null) {
@@ -230,6 +233,8 @@ function AppInner({
         else void retrieve(uname); // sets list+screen; key matches, no push
       } else if (scr === "stats" && uname && list?.username === uname) {
         setScreen("stats");
+      } else if (scr === "puzzles") {
+        setScreen("puzzles");
       } else if (scr === "settings") {
         setScreen("settings");
       } else {
@@ -328,6 +333,17 @@ function AppInner({
             </svg>
           </button>
           <button
+            onClick={() => setScreen("puzzles")}
+            title={t("titlePuzzles")}
+            aria-label={t("titlePuzzles")}
+            className={`${iconBtn} ${screen === "puzzles" ? "text-accent" : ""}`}
+          >
+            {/* puzzle piece, monochrome */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M12 2a3 3 0 0 0-3 3v.5H7.5A1.5 1.5 0 0 0 6 7v1.5H5.5A1.5 1.5 0 0 0 4 10v2.5h1.5v2A2.5 2.5 0 0 0 8 17h2v2.5c0 .83.67 1.5 1.5 1.5h5c.83 0 1.5-.67 1.5-1.5V17h2a2.5 2.5 0 0 0 2.5-2.5v-2H22V10a1.5 1.5 0 0 0-1.5-1.5H20V7a1.5 1.5 0 0 0-1.5-1.5H15V5a3 3 0 0 0-3-3z" />
+            </svg>
+          </button>
+          <button
             onClick={toSettings}
             title={t("titleSettings")}
             aria-label={t("titleSettings")}
@@ -413,6 +429,17 @@ function AppInner({
               </div>
             </div>
           ))}
+
+        {screen === "puzzles" && (
+          <PuzzleView
+            username={list?.username ?? ""}
+            games={list?.games ?? []}
+            engineKind={settings.engine}
+            threads={settings.threads}
+            onOpenGame={openGame}
+            onGoPlayers={() => setScreen("users")}
+          />
+        )}
 
         {screen === "review" && reviewGame && (
           <ReviewView

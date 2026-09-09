@@ -140,6 +140,36 @@ const MIGRATIONS: string[] = [
   ALTER TABLE players ADD COLUMN avatar_url TEXT;
   ALTER TABLE players ADD COLUMN ratings_updated_at INTEGER;
   `,
+  // v3 - puzzles generated from the player's OWN analysed games.
+  // Generation is client-driven (the WASM engine lives in the browser): the
+  // extractor persists raw candidates as 'pending', the validator flips
+  // them to 'ready' or 'rejected' (+reason), solving walks them through
+  // 'seen' (solution revealed via hint) and 'solved'. UNIQUE(username, fen)
+  // is the position-identity dedup across games. See docs/FEATURE-PUZZLES.md.
+  `
+  CREATE TABLE puzzles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL COLLATE NOCASE,
+    game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    ply INTEGER NOT NULL,                    -- 0-based ply of the solution move
+    fen TEXT NOT NULL,                       -- position BEFORE the solution move
+    side TEXT NOT NULL CHECK (side IN ('w','b')),
+    solution_uci TEXT NOT NULL,
+    solution_san TEXT,
+    mate_len INTEGER,                        -- null = material puzzle
+    theme TEXT,                              -- 'mate' | 'win'
+    pv_json TEXT NOT NULL DEFAULT '[]',      -- engine line (UCI) shown after solving
+    punish INTEGER NOT NULL DEFAULT 0,       -- 1 = punishment of an opponent blunder
+    rating_est INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending|ready|rejected|seen|solved
+    fail_reason TEXT,                        -- cooked|unsound|trivial|...
+    attempts INTEGER NOT NULL DEFAULT 0,     -- wrong tries; infinite retries
+    solved_at INTEGER,
+    created_at INTEGER NOT NULL,
+    UNIQUE(username, fen)
+  );
+  CREATE INDEX idx_puzzles_user_status ON puzzles(username, status);
+  `,
 ];
 
 let db: Database | null = null;
@@ -730,6 +760,7 @@ export function deletePlayer(username: string): {
     );
     if (!player) return { removed: false, gamesRemoved: 0, analysesRemoved: 0 };
 
+    d.run("DELETE FROM puzzles WHERE username = ?", [username.trim()]);
     d.run("DELETE FROM players WHERE id = ?", [player.id]);
 
     const orphans = d
@@ -748,4 +779,241 @@ export function deletePlayer(username: string): {
     }
     return { removed: true, gamesRemoved: ids.length, analysesRemoved };
   })();
+}
+
+// ---------------------------------------------------------------------------
+// puzzles (see docs/FEATURE-PUZZLES.md)
+// ---------------------------------------------------------------------------
+
+export interface PuzzleRow {
+  id: number;
+  username: string;
+  gameId: string;
+  ply: number;
+  fen: string;
+  side: "w" | "b";
+  solutionUci: string;
+  solutionSan: string | null;
+  mateLen: number | null;
+  theme: string | null;
+  /** engine line (UCI) played out after solving; starts with the solution */
+  pv: string[];
+  punish: boolean;
+  ratingEst: number | null;
+  status: string;
+  failReason: string | null;
+  attempts: number;
+  solvedAt: number | null;
+  createdAt: number;
+}
+
+/** Raw candidate as persisted by the (client-side) extractor. */
+export interface NewPuzzle {
+  gameId: string;
+  ply: number;
+  fen: string;
+  side: "w" | "b";
+  solutionUci: string;
+  solutionSan: string | null;
+  mateLen: number | null;
+  theme: string | null;
+  pv: string[];
+  punish: boolean;
+  ratingEst: number | null;
+}
+
+interface PuzzleDbRow {
+  id: number;
+  username: string;
+  game_id: string;
+  ply: number;
+  fen: string;
+  side: string;
+  solution_uci: string;
+  solution_san: string | null;
+  mate_len: number | null;
+  theme: string | null;
+  pv_json: string;
+  punish: number;
+  rating_est: number | null;
+  status: string;
+  fail_reason: string | null;
+  attempts: number;
+  solved_at: number | null;
+  created_at: number;
+}
+
+const PUZZLE_COLS = `id, username, game_id, ply, fen, side, solution_uci, solution_san,
+  mate_len, theme, pv_json, punish, rating_est, status, fail_reason, attempts, solved_at, created_at`;
+
+function safeParseArr(s: string): string[] {
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function toPuzzle(r: PuzzleDbRow): PuzzleRow {
+  return {
+    id: r.id,
+    username: r.username,
+    gameId: r.game_id,
+    ply: r.ply,
+    fen: r.fen,
+    side: r.side as "w" | "b",
+    solutionUci: r.solution_uci,
+    solutionSan: r.solution_san,
+    mateLen: r.mate_len,
+    theme: r.theme,
+    pv: safeParseArr(r.pv_json),
+    punish: r.punish === 1,
+    ratingEst: r.rating_est,
+    status: r.status,
+    failReason: r.fail_reason,
+    attempts: r.attempts,
+    solvedAt: r.solved_at,
+    createdAt: r.created_at,
+  };
+}
+
+/**
+ * Insert extraction candidates; existing (username, fen) rows are left
+ * untouched (idempotent regeneration, cross-game dedup). Returns how many
+ * rows were actually inserted.
+ */
+export function upsertPuzzles(username: string, rows: NewPuzzle[]): { inserted: number } {
+  if (rows.length === 0) return { inserted: 0 };
+  const d = getDb();
+  const u = username.trim();
+  const now = Date.now();
+  let inserted = 0;
+  d.transaction(() => {
+    for (const r of rows) {
+      const res = d.run(
+        `INSERT OR IGNORE INTO puzzles
+         (username, game_id, ply, fen, side, solution_uci, solution_san, mate_len,
+          theme, pv_json, punish, rating_est, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        [
+          u,
+          r.gameId,
+          r.ply,
+          r.fen,
+          r.side,
+          r.solutionUci,
+          r.solutionSan,
+          r.mateLen,
+          r.theme,
+          JSON.stringify(r.pv ?? []),
+          r.punish ? 1 : 0,
+          r.ratingEst,
+          now,
+        ],
+      );
+      inserted += res.changes;
+    }
+  })(); // bun transactions are returned, not run - invoke the wrapper
+  return { inserted };
+}
+
+/** Puzzles of a player in the given statuses, oldest first (generation order). */
+export function listPuzzles(username: string, statuses: string[], limit = 200): PuzzleRow[] {
+  if (statuses.length === 0) return [];
+  const d = getDb();
+  const marks = statuses.map(() => "?").join(",");
+  return allOf<PuzzleDbRow>(
+    d.query(
+      `SELECT ${PUZZLE_COLS} FROM puzzles
+       WHERE username = ? AND status IN (${marks})
+       ORDER BY id ASC LIMIT ?`,
+    ),
+    [username.trim(), ...statuses, limit],
+  ).map(toPuzzle);
+}
+
+/** game ids that already went through extraction (any puzzle row exists) */
+export function puzzleGameIds(username: string): string[] {
+  const d = getDb();
+  return allOf<{ game_id: string }>(
+    d.query("SELECT DISTINCT game_id FROM puzzles WHERE username = ?"),
+    [username.trim()],
+  ).map((r) => r.game_id);
+}
+
+export function countPuzzlesByStatus(username: string): Record<string, number> {
+  const d = getDb();
+  const rows = allOf<{ status: string; n: number }>(
+    d.query("SELECT status, COUNT(*) AS n FROM puzzles WHERE username = ? GROUP BY status"),
+    [username.trim()],
+  );
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.status] = r.n;
+  return out;
+}
+
+export function getPuzzle(id: number): PuzzleRow | null {
+  const d = getDb();
+  const row = getOf<PuzzleDbRow>(
+    d.query(`SELECT ${PUZZLE_COLS} FROM puzzles WHERE id = ?`),
+    [id],
+  );
+  return row ? toPuzzle(row) : null;
+}
+
+/** Validation verdict for a candidate (idempotent). */
+export function resolvePuzzle(
+  id: number,
+  ok: boolean,
+  failReason: string | null,
+  patch?: { solutionUci?: string; solutionSan?: string | null; mateLen?: number | null; theme?: string | null; ratingEst?: number | null },
+): PuzzleRow | null {
+  const d = getDb();
+  const cur = getPuzzle(id);
+  if (!cur) return null;
+  d.run(
+    `UPDATE puzzles SET status = ?, fail_reason = ?,
+       solution_uci = ?, solution_san = ?, mate_len = ?, theme = ?, rating_est = ?
+     WHERE id = ?`,
+    [
+      ok ? "ready" : "rejected",
+      ok ? null : failReason,
+      patch?.solutionUci ?? cur.solutionUci,
+      patch?.solutionSan ?? cur.solutionSan,
+      patch?.mateLen ?? cur.mateLen,
+      patch?.theme ?? cur.theme,
+      patch?.ratingEst ?? cur.ratingEst,
+      id,
+    ],
+  );
+  return getPuzzle(id);
+}
+
+/**
+ * Solve bookkeeping: every wrong try bumps `attempts` (infinite retries);
+ * revealing via the hint marks a 'ready' puzzle 'seen'; solving always
+ * marks 'solved' (even after 'seen').
+ */
+export function attemptPuzzle(
+  id: number,
+  opts: { solved: boolean; revealed?: boolean },
+): PuzzleRow | null {
+  const d = getDb();
+  const cur = getPuzzle(id);
+  if (!cur) return null;
+  if (opts.solved) {
+    d.run("UPDATE puzzles SET attempts = attempts + 1, status = 'solved', solved_at = ? WHERE id = ?", [
+      Date.now(),
+      id,
+    ]);
+  } else if (opts.revealed) {
+    d.run(
+      "UPDATE puzzles SET attempts = attempts + 1, status = CASE WHEN status = 'ready' THEN 'seen' ELSE status END WHERE id = ?",
+      [id],
+    );
+  } else {
+    d.run("UPDATE puzzles SET attempts = attempts + 1 WHERE id = ?", [id]);
+  }
+  return getPuzzle(id);
 }

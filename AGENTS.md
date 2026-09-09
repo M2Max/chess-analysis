@@ -33,7 +33,7 @@ build-time) · bun:sqlite (WAL) · GitHub Actions → GHCR (amd64+arm64).
 ```sh
 bun run dev          # vite (LAN host) :5173   - dev server, hot reload
 bun server/index.ts  # data API :3000          - required alongside vite in dev
-bun test             # 235 tests, no browser/WASM needed
+bun test             # 272 tests, no browser/WASM needed
 npx tsc -b           # typecheck (part of `bun run build`)
 ```
 

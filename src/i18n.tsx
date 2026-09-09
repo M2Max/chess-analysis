@@ -108,6 +108,56 @@ const STRINGS = {
   },
   goSettings: { it: "Vai alle impostazioni", en: "Go to settings" },
   goPlayers: { it: "Vai ai giocatori", en: "Go to players" },
+
+  // ---- puzzles (docs/FEATURE-PUZZLES.md) ----
+  titlePuzzles: { it: "Puzzle", en: "Puzzles" },
+  puzzlesGenerate: { it: "Genera puzzle", en: "Generate puzzles" },
+  puzzlesIntro: {
+    it: "I puzzle nascono dalle Tue partite già analizzate: i momenti in cui c'era una mossa forte e l'hai vista (o no).",
+    en: "Puzzles are born from Your own analysed games: the moments where a strong move was there and You saw it (or not).",
+  },
+  puzzlesExtracting: {
+    it: "Cerco i momenti chiave… {done}/{total}",
+    en: "Scanning your games… {done}/{total}",
+  },
+  puzzlesValidating: {
+    it: "Preparo i puzzle {done}/{total}",
+    en: "Preparing puzzles {done}/{total}",
+  },
+  puzzlesNeedUsername: {
+    it: "Apri un giocatore per generare i suoi puzzle.",
+    en: "Open a player to generate their puzzles.",
+  },
+  puzzlesNoAnalysed: {
+    it: "Nessuna partita analizzata: analizza qualche partita dalla lista, poi genera.",
+    en: "No analysed games yet: analyse a few games from the list, then generate.",
+  },
+  puzzlesAllDone: {
+    it: "Nessun nuovo puzzle: tutte le partite analizzate sono già state passate.",
+    en: "No new puzzles: every analysed game has already been scanned.",
+  },
+  puzzlesQueueEmpty: {
+    it: "Hai finito i puzzle. Generane altri dopo nuove partite.",
+    en: "You finished the puzzles. Generate more after new games.",
+  },
+  puzzleCounter: { it: "Puzzle {n} di {total}", en: "Puzzle {n} of {total}" },
+  puzzleStatsLine: {
+    it: "{solved}/{total} risolti · {streak} di fila",
+    en: "{solved}/{total} solved · {streak} streak",
+  },
+  puzzleHint: { it: "Suggerimento", en: "Hint" },
+  puzzleShowSolution: { it: "Mostra la soluzione", en: "Show solution" },
+  puzzleTryAgain: { it: "Riprova", en: "Try again" },
+  puzzleCorrect: { it: "Corretto!", en: "Correct!" },
+  puzzleSolutionLabel: { it: "Soluzione", en: "Solution" },
+  puzzleViewInGame: { it: "Vedi nella partita", en: "View in game" },
+  puzzleNext: { it: "Puzzle successivo", en: "Next puzzle" },
+  puzzleTierEasy: { it: "Facile", en: "Easy" },
+  puzzleTierMid: { it: "Medio", en: "Medium" },
+  puzzleTierHard: { it: "Difficile", en: "Hard" },
+  puzzleThemeMate: { it: "Matto in {n}", en: "Mate in {n}" },
+  puzzleThemeWin: { it: "Vinto materiale", en: "Win material" },
+  puzzlePunishTag: { it: "Punisci l'errore", en: "Punish the blunder" },
   loadingGames: { it: "Carico le partite…", en: "Loading your games…" },
 
   // ── game list ────────────────────────────────────────────────────────────

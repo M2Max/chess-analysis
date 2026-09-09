@@ -291,3 +291,115 @@ describe("POST/DELETE /api/db/players (multi-user)", () => {
     expect(res!.status).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------------
+// puzzles HTTP layer
+// ---------------------------------------------------------------------------
+
+describe("puzzles API", () => {
+  const PUZ = {
+    gameId: "puz-game-1",
+    ply: 7,
+    fen: "rnbqkb1r/pppp1ppp/4pn2/8/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2",
+    side: "b",
+    solutionUci: "d8h4",
+    solutionSan: "Qh4#",
+    mateLen: 1,
+    theme: "mate",
+    pv: ["d8h4"],
+    punish: true,
+    ratingEst: 900,
+  };
+
+  beforeAll(() => {
+    const d = getDb();
+    d.run("DELETE FROM games WHERE id = ?", ["puz-game-1"]);
+    d.run(
+      `INSERT INTO games (id, utc, result, pgn, white_username, white_name, black_username, black_name, updated_at)
+       VALUES ('puz-game-1', 1750000000, '*', '', 'puzuser', 'PZ', 'oppx', 'OX', 1)`,
+    );
+  });
+
+  const post = (path: string, body: unknown) =>
+    call(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  test("batch: rejects bad username / payload", async () => {
+    expect((await post("/api/db/puzzles/batch", { username: "x!", puzzles: [] })).status).toBe(400);
+    expect((await post("/api/db/puzzles/batch", { username: "puzuser", puzzles: "nope" })).status).toBe(400);
+    expect(
+      (await post("/api/db/puzzles/batch", { username: "puzuser", puzzles: [{ ...PUZ, fen: 3 }] })).status,
+    ).toBe(400);
+  });
+
+  test("batch insert + idempotent dedup + list + meta", async () => {
+    const first = await callJson("/api/db/puzzles/batch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "puzuser", puzzles: [PUZ] }),
+    });
+    expect((first as { inserted: number }).inserted).toBe(1);
+    const again = await callJson("/api/db/puzzles/batch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "puzuser", puzzles: [PUZ] }),
+    });
+    expect((again as { inserted: number }).inserted).toBe(0);
+
+    const pending = (await callJson("/api/db/puzzles?username=puzuser&statuses=pending")) as {
+      puzzles: { id: number; fen: string; punish: boolean; pv: string[] }[];
+    };
+    expect(pending.puzzles.length).toBe(1);
+    expect(pending.puzzles[0].punish).toBe(true);
+    expect(pending.puzzles[0].pv).toEqual(["d8h4"]);
+
+    const meta = (await callJson("/api/db/puzzles/meta?username=puzuser")) as {
+      counts: Record<string, number>;
+      gameIds: string[];
+    };
+    expect(meta.counts.pending).toBe(1);
+    expect(meta.gameIds).toContain("puz-game-1");
+  });
+
+  test("resolve verdict -> ready (with patch) then attempt bookkeeping", async () => {
+    const list = (await callJson("/api/db/puzzles?username=puzuser&statuses=pending")) as {
+      puzzles: { id: number }[];
+    };
+    const id = list.puzzles[0].id;
+
+    const resolved = (await callJson("/api/db/puzzles/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, ok: true, patch: { solutionSan: "Qh4#" } }),
+    })) as { puzzle: { status: string; solutionSan: string } };
+    expect(resolved.puzzle.status).toBe("ready");
+
+    const wrong = (await callJson(`/api/db/puzzles/${id}/attempt`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ solved: false }),
+    })) as { puzzle: { status: string; attempts: number } };
+    expect(wrong.puzzle.status).toBe("ready");
+    expect(wrong.puzzle.attempts).toBe(1);
+
+    const solved = (await callJson(`/api/db/puzzles/${id}/attempt`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ solved: true }),
+    })) as { puzzle: { status: string; attempts: number; solvedAt: number } };
+    expect(solved.puzzle.status).toBe("solved");
+    expect(solved.puzzle.solvedAt).toBeGreaterThan(0);
+  });
+
+  test("unknown ids → 404; bad bodies → 400", async () => {
+    expect((await post("/api/db/puzzles/resolve", { id: 999999, ok: true })).status).toBe(404);
+    expect((await post("/api/db/puzzles/999999/attempt", { solved: true })).status).toBe(404);
+    expect((await post("/api/db/puzzles/1/attempt", { nope: 1 })).status).toBe(400);
+    expect((await post("/api/db/puzzles/resolve", { id: "x", ok: true })).status).toBe(400);
+  });
+
+  test("GET puzzles requires username; statuses filter defaults", async () => {
+    expect((await call("/api/db/puzzles")).status).toBe(400);
+    const res = await call("/api/db/puzzles?username=puzuser");
+    expect(res?.status).toBe(200);
+  });
+});

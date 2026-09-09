@@ -9,16 +9,24 @@ import {
 } from "../src/api/games";
 import type { CachedAnalysis } from "../src/api/analysisCache";
 import {
+  attemptPuzzle,
+  countPuzzlesByStatus,
   deletePlayer,
   getAnalysis,
   getGamesForPlayer,
+  getPuzzle,
   getStatsForPlayer,
   listIsFresh,
   listPlayers,
+  listPuzzles,
+  puzzleGameIds,
+  resolvePuzzle,
   saveAnalysisForGame,
   savePlayerProfile,
   upsertList,
+  upsertPuzzles,
   upsertPlayer,
+  type NewPuzzle,
 } from "./db";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -174,6 +182,94 @@ export async function handleDbApi(req: Request, url: URL): Promise<Response | nu
     const res = deletePlayer(u);
     if (!res.removed) return json({ error: "player not found" }, 404);
     return json({ ok: true, gamesRemoved: res.gamesRemoved, analysesRemoved: res.analysesRemoved });
+  }
+
+  // ---- puzzles (docs/FEATURE-PUZZLES.md) --------------------------------
+  // generation is client-driven; the server only stores + bookkeeps
+
+  // GET /api/db/puzzles?username=&statuses=ready,seen&limit=
+  if (parts[1] === "puzzles" && parts.length === 2 && req.method === "GET") {
+    const username = url.searchParams.get("username") ?? "";
+    if (!username) return json({ error: "missing username" }, 400);
+    const statuses = (url.searchParams.get("statuses") ?? "ready,seen,solved")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => ["pending", "ready", "rejected", "seen", "solved"].includes(s));
+    const limit = num(url.searchParams.get("limit")) ?? 200;
+    return json({ puzzles: listPuzzles(username, statuses, Math.min(500, Math.max(1, limit))) });
+  }
+
+  // GET /api/db/puzzles/meta?username= - status counts + extracted game ids
+  if (parts[1] === "puzzles" && parts[2] === "meta" && parts.length === 3 && req.method === "GET") {
+    const username = url.searchParams.get("username") ?? "";
+    if (!username) return json({ error: "missing username" }, 400);
+    return json({ counts: countPuzzlesByStatus(username), gameIds: puzzleGameIds(username) });
+  }
+
+  // POST /api/db/puzzles/batch {username, puzzles:[...]}
+  if (parts[1] === "puzzles" && parts[2] === "batch" && parts.length === 3 && req.method === "POST") {
+    const parsed = await readJsonBody(req);
+    if ("error" in parsed) return json({ error: parsed.error }, parsed.error === "payload too large" ? 413 : 400);
+    const body = parsed.value as { username?: unknown; puzzles?: unknown };
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    if (!/^[A-Za-z0-9_]{2,25}$/.test(username)) return json({ error: "invalid-username" }, 400);
+    if (!Array.isArray(body.puzzles)) return json({ error: "invalid-payload" }, 400);
+    const rows: NewPuzzle[] = [];
+    for (const raw of body.puzzles.slice(0, 200)) {
+      const r = raw as Partial<NewPuzzle>;
+      if (
+        typeof r?.gameId !== "string" ||
+        typeof r?.ply !== "number" ||
+        typeof r?.fen !== "string" ||
+        (r.side !== "w" && r.side !== "b") ||
+        typeof r?.solutionUci !== "string"
+      ) {
+        return json({ error: "invalid-payload" }, 400);
+      }
+      rows.push({
+        gameId: r.gameId,
+        ply: r.ply,
+        fen: r.fen,
+        side: r.side,
+        solutionUci: r.solutionUci,
+        solutionSan: typeof r.solutionSan === "string" ? r.solutionSan : null,
+        mateLen: typeof r.mateLen === "number" ? r.mateLen : null,
+        theme: typeof r.theme === "string" ? r.theme : null,
+        pv: Array.isArray(r.pv) ? r.pv.filter((x) => typeof x === "string").slice(0, 20) : [],
+        punish: r.punish === true,
+        ratingEst: typeof r.ratingEst === "number" ? r.ratingEst : null,
+      });
+    }
+    return json(upsertPuzzles(username, rows), 201);
+  }
+
+  // POST /api/db/puzzles/resolve {id, ok, failReason?, patch?} - validation verdict
+  if (parts[1] === "puzzles" && parts[2] === "resolve" && parts.length === 3 && req.method === "POST") {
+    const parsed = await readJsonBody(req);
+    if ("error" in parsed) return json({ error: parsed.error }, parsed.error === "payload too large" ? 413 : 400);
+    const body = parsed.value as {
+      id?: unknown;
+      ok?: unknown;
+      failReason?: unknown;
+      patch?: { solutionUci?: string; solutionSan?: string | null; mateLen?: number | null; theme?: string | null; ratingEst?: number | null };
+    };
+    if (typeof body.id !== "number" || typeof body.ok !== "boolean") return json({ error: "invalid-payload" }, 400);
+    const puzzle = resolvePuzzle(body.id, body.ok, typeof body.failReason === "string" ? body.failReason : null, body.patch);
+    if (!puzzle) return json({ error: "not found" }, 404);
+    return json({ puzzle });
+  }
+
+  // POST /api/db/puzzles/{id}/attempt {solved, revealed?}
+  if (parts[1] === "puzzles" && parts.length === 4 && parts[3] === "attempt" && req.method === "POST") {
+    const id = Number(parts[2]);
+    if (!Number.isInteger(id)) return json({ error: "invalid id" }, 400);
+    const parsed = await readJsonBody(req);
+    if ("error" in parsed) return json({ error: parsed.error }, parsed.error === "payload too large" ? 413 : 400);
+    const body = parsed.value as { solved?: unknown; revealed?: unknown };
+    if (typeof body.solved !== "boolean") return json({ error: "invalid-payload" }, 400);
+    const puzzle = attemptPuzzle(id, { solved: body.solved, revealed: body.revealed === true });
+    if (!puzzle) return json({ error: "not found" }, 404);
+    return json({ puzzle });
   }
 
   // GET /api/db/players/{u}/games[?refresh=1&from=&to=]

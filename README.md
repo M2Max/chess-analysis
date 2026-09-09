@@ -40,7 +40,12 @@ No server computation, no API keys.
   trouble), clock panel, phase split, conversion of won positions,
   performance rating vs expected score, improvement trend, Elo trajectory
 - 🖱️ Every chart is interactive: exact values on hover, click to jump into
-  the review at that move
+  the review at that move; engine best lines are clickable - tap a move to
+  replay the line as an analysed branch
+- 🧩 Puzzles generated from your own analysed games (missed wins, missed
+  mates, punishment of your opponent's blunders) - engine-validated for a
+  unique sound solution, with difficulty tiers, a light-bulb hint
+  (piece highlight + countdown) and a jump back to the source game
 - 📖 Opening recognition (Lichess CC0 dataset, 3,810 openings) with book
   moves marked on the board and in the move list
 - 🗄️ Server-side SQLite (bun:sqlite): games and analyses shared across all
@@ -54,7 +59,7 @@ No server computation, no API keys.
 bun install          # postinstall fetches the Stockfish builds + opening index
 bun run dev          # frontend  -> http://localhost:5173
 bun server/index.ts  # data API + SQLite -> http://localhost:3000
-bun test             # 235 tests
+bun test             # 272 tests
 ```
 
 `?demo` loads the Opera Game (Morphy 1858) fully offline.
@@ -82,6 +87,7 @@ script, data backup): **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**
 | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Registries, TrueNAS Scale, certificates, SQLite backup |
 | [docs/SECURITY-AUDIT.md](./docs/SECURITY-AUDIT.md) | Secret scan, hardening, residual risks |
 | [docs/STATS-ROADMAP.md](./docs/STATS-ROADMAP.md) | Stats metrics: research behind each one, what shipped, non-goals |
+| [docs/FEATURE-PUZZLES.md](./docs/FEATURE-PUZZLES.md) | Puzzles from your own games: selection + validation design |
 | [docs/PRE-PUBLISH-CHECKLIST.md](./docs/PRE-PUBLISH-CHECKLIST.md) | Final publish report |
 
 ## License

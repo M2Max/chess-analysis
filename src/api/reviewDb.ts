@@ -122,3 +122,118 @@ export async function removePlayer(username: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`remove player failed (${res.status})`);
 }
+
+// ---------------------------------------------------------------------------
+// puzzles (docs/FEATURE-PUZZLES.md) - server bookkeeping only; the engine
+// extraction/validation happens client-side (src/puzzles/*)
+// ---------------------------------------------------------------------------
+
+export type PuzzleStatus = "pending" | "ready" | "rejected" | "seen" | "solved";
+
+export interface Puzzle {
+  id: number;
+  username: string;
+  gameId: string;
+  ply: number;
+  fen: string;
+  side: "w" | "b";
+  solutionUci: string;
+  solutionSan: string | null;
+  mateLen: number | null;
+  theme: string | null;
+  /** engine line (UCI), starts with the solution; shown after solving */
+  pv: string[];
+  punish: boolean;
+  ratingEst: number | null;
+  status: PuzzleStatus;
+  failReason: string | null;
+  attempts: number;
+  solvedAt: number | null;
+  createdAt: number;
+}
+
+export interface NewPuzzleInput {
+  gameId: string;
+  ply: number;
+  fen: string;
+  side: "w" | "b";
+  solutionUci: string;
+  solutionSan: string | null;
+  mateLen: number | null;
+  theme: string | null;
+  pv: string[];
+  punish: boolean;
+  ratingEst: number | null;
+}
+
+export async function fetchPuzzles(
+  username: string,
+  statuses: PuzzleStatus[] = ["ready", "seen", "solved"],
+  limit = 200,
+): Promise<Puzzle[]> {
+  const q = new URLSearchParams({ username, statuses: statuses.join(","), limit: String(limit) });
+  const res = await fetch(`/api/db/puzzles?${q}`);
+  if (!res.ok) throw new Error(`puzzles request failed (${res.status})`);
+  const body = (await res.json()) as { puzzles: Puzzle[] };
+  return body.puzzles;
+}
+
+export async function fetchPuzzlesMeta(
+  username: string,
+): Promise<{ counts: Record<string, number>; gameIds: string[] }> {
+  const res = await fetch(`/api/db/puzzles/meta?username=${encodeURIComponent(username)}`);
+  if (!res.ok) throw new Error(`puzzles meta failed (${res.status})`);
+  return (await res.json()) as { counts: Record<string, number>; gameIds: string[] };
+}
+
+/** Persist raw extraction candidates; returns how many were new. */
+export async function savePuzzleBatch(username: string, puzzles: NewPuzzleInput[]): Promise<number> {
+  let inserted = 0;
+  // keep requests small even for big passes
+  for (let i = 0; i < puzzles.length; i += 100) {
+    const res = await fetch("/api/db/puzzles/batch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username, puzzles: puzzles.slice(i, i + 100) }),
+    });
+    if (!res.ok) throw new Error(`puzzle batch failed (${res.status})`);
+    inserted += ((await res.json()) as { inserted: number }).inserted;
+  }
+  return inserted;
+}
+
+export interface ResolvePatch {
+  solutionUci?: string;
+  solutionSan?: string | null;
+  mateLen?: number | null;
+  theme?: string | null;
+  ratingEst?: number | null;
+}
+
+export async function resolvePuzzleApi(
+  id: number,
+  ok: boolean,
+  failReason: string | null,
+  patch?: ResolvePatch,
+): Promise<void> {
+  const res = await fetch("/api/db/puzzles/resolve", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, ok, failReason, patch }),
+  });
+  if (!res.ok) throw new Error(`puzzle resolve failed (${res.status})`);
+}
+
+/** solved = correct move; revealed = hint path exposed the solution. */
+export async function attemptPuzzleApi(
+  id: number,
+  solved: boolean,
+  revealed = false,
+): Promise<void> {
+  const res = await fetch(`/api/db/puzzles/${id}/attempt`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ solved, revealed }),
+  });
+  if (!res.ok) throw new Error(`puzzle attempt failed (${res.status})`);
+}
