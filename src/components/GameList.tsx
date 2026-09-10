@@ -194,7 +194,7 @@ export function GameList({ username, games, truncated, busy, fetchedAt, onSelect
           onClick={onBack}
           className="rounded-md px-2 py-1 text-sm text-ink-mute transition hover:bg-btn hover:text-ink-soft"
         >
-          {t("backToSettings")}
+          {t("backArrow")}
         </button>
         <h2 className="text-sm text-ink-mute">
           {t("last30days")} ·{" "}

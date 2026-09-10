@@ -257,9 +257,13 @@ function AppInner({
   return (
     <div className="flex min-h-screen flex-col bg-app px-4 py-6 text-ink lg:px-8">
       <header className="mx-auto mb-6 flex w-full max-w-6xl items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-600 text-lg text-white">
-          ♞
-        </div>
+        <img
+          src="/logo.png"
+          alt=""
+          className="h-9 w-9 rounded-md object-cover"
+          width={36}
+          height={36}
+        />
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold tracking-wide text-ink">chess-analysis</h1>
           <p className="truncate text-xs text-ink-faint">{t("tagline")}</p>

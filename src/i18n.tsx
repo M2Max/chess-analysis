@@ -52,7 +52,7 @@ const STRINGS = {
   // ── settings ─────────────────────────────────────────────────────────────
   backToGames: { it: "← Partite", en: "← Games" },
   backToPlayers: { it: "← Giocatori", en: "← Players" },
-  backToSettings: { it: "← Impostazioni", en: "← Settings" },
+  backArrow: { it: "← Indietro", en: "← Back" },
   settingsTitle: { it: "Impostazioni", en: "Settings" },
   settingsSubtitle: {
     it: "Le preferenze sono salvate in questo browser.",

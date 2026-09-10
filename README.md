@@ -1,4 +1,6 @@
-# chess-analysis ♞
+<img src="public/logo.png" alt="chess-analysis logo" width="72" height="72" align="left" hspace="12" />
+
+# chess-analysis
 
 [![docker build](https://github.com/M2Max/chess-analysis/actions/workflows/docker.yml/badge.svg)](https://github.com/M2Max/chess-analysis/actions/workflows/docker.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-059669)](./LICENSE)
