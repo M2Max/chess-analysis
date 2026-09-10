@@ -319,11 +319,15 @@ function AppInner({
             )}
           </div>
 
+          {/* player-context buttons: visible from the game list onwards,
+              hidden on home and settings (chrome-only there) */}
           <button
             onClick={() => setScreen("stats")}
             title={t("titleStats")}
             aria-label={t("titleStats")}
-            className={`${iconBtn} ${screen === "stats" ? "text-accent" : ""}`}
+            className={`${iconBtn} ${screen === "stats" ? "text-accent" : ""} ${
+              screen === "users" || screen === "settings" ? "hidden" : ""
+            }`}
           >
             {/* stylized bar chart */}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -336,7 +340,9 @@ function AppInner({
             onClick={() => setScreen("puzzles")}
             title={t("titlePuzzles")}
             aria-label={t("titlePuzzles")}
-            className={`${iconBtn} ${screen === "puzzles" ? "text-accent" : ""}`}
+            className={`${iconBtn} ${screen === "puzzles" ? "text-accent" : ""} ${
+              screen === "users" || screen === "settings" ? "hidden" : ""
+            }`}
           >
             {/* puzzle piece, monochrome */}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -438,6 +444,7 @@ function AppInner({
             threads={settings.threads}
             onOpenGame={openGame}
             onGoPlayers={() => setScreen("users")}
+            onExit={() => setScreen(list ? "list" : "users")}
           />
         )}
 

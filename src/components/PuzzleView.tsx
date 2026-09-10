@@ -25,10 +25,14 @@ interface Props {
   threads: number;
   onOpenGame: (game: Game, ply?: number) => void;
   onGoPlayers: () => void;
+  /** leave the puzzle section (back to the game list) */
+  onExit: () => void;
 }
 
 const HINT_SECONDS = 30;
 const VALIDATION_MOVE_MS = 1500;
+/** how long the "wrong move" modal stays up before the board resets */
+const WRONG_MS = 1000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -55,7 +59,15 @@ function BulbIcon({ className = "" }: { className?: string }) {
 }
 
 /** amber ring drawn ON the board over one square (hint: the piece to move) */
-function SquareRing({ square, wrapRef, orientation }: { square: string; wrapRef: React.RefObject<HTMLDivElement | null>; orientation: "white" | "black" }) {
+function SquareRing({
+  square,
+  wrapRef,
+  orientation,
+}: {
+  square: string;
+  wrapRef: React.RefObject<HTMLDivElement | null>;
+  orientation: "white" | "black";
+}) {
   const [pos, setPos] = useState<{ left: number; top: number; size: number } | null>(null);
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -81,11 +93,19 @@ function SquareRing({ square, wrapRef, orientation }: { square: string; wrapRef:
   );
 }
 
-type Phase = "loading" | "empty" | "generating" | "queue";
+type Phase = "loading" | "hub" | "generating" | "playing";
 type PuzzlePhase = "solving" | "solved" | "revealed";
 type HintStage = "off" | "count" | "ready";
 
-export function PuzzleView({ username, games, engineKind, threads, onOpenGame, onGoPlayers }: Props) {
+export function PuzzleView({
+  username,
+  games,
+  engineKind,
+  threads,
+  onOpenGame,
+  onGoPlayers,
+  onExit,
+}: Props) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>("loading");
   const [puzzles, setPuzzles] = useState<Puzzle[]>([]);
@@ -99,13 +119,17 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
   const [puzzlePhase, setPuzzlePhase] = useState<PuzzlePhase>("solving");
   const [hint, setHint] = useState<HintStage>("off");
   const [hintSecs, setHintSecs] = useState(HINT_SECONDS);
-  const [feedback, setFeedback] = useState<"" | "wrong" | "correct">("");
+  // wrong move: the position AFTER the wrong move; drives the greyed-out
+  // modal; after WRONG_MS the board snaps back and the modal disappears
+  const [wrongFen, setWrongFen] = useState<string | null>(null);
+  const wrongTimerRef = useRef<number | null>(null);
   const [streak, setStreak] = useState(0);
   const animRef = useRef(0); // invalidates pending pv animations on puzzle change
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
 
   const puzzle: Puzzle | undefined = puzzles[idx];
   const solvedCount = puzzles.filter((p) => p.status === "solved").length;
+  const unsolvedIdx = puzzles.findIndex((p) => p.status !== "solved");
 
   const loadQueue = useCallback(async () => {
     if (!username) return;
@@ -113,25 +137,26 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
     setPuzzles(list);
     const firstOpen = list.findIndex((p) => p.status !== "solved");
     setIdx(firstOpen === -1 ? 0 : firstOpen);
-    setPhase(list.some((p) => p.status === "ready" || p.status === "seen") ? "queue" : "empty");
+    setPhase("hub");
   }, [username]);
 
   useEffect(() => {
     setPhase("loading");
     setPuzzles([]);
     setProgress(null);
-    void loadQueue().catch(() => setPhase("empty"));
+    void loadQueue().catch(() => setPhase("hub"));
   }, [loadQueue]);
 
   // reset per-puzzle state whenever the current puzzle changes
   useEffect(() => {
     animRef.current += 1;
+    if (wrongTimerRef.current) window.clearTimeout(wrongTimerRef.current);
+    setWrongFen(null);
     if (!puzzle) return;
     setFen(puzzle.fen);
     setPuzzlePhase(puzzle.status === "solved" ? "solved" : "solving");
     setHint("off");
     setHintSecs(HINT_SECONDS);
-    setFeedback("");
   }, [puzzle?.id, puzzle?.status, puzzle]);
 
   // hint countdown
@@ -181,7 +206,7 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
     }
     const engine = getEngine(engineKind, threads);
     try {
-      const result = await generatePuzzles({
+      await generatePuzzles({
         username,
         games,
         baseRating,
@@ -189,17 +214,19 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
         onProgress: setProgress,
         shouldStop: () => stopRef.current,
       });
-      await loadQueue();
-      if (result.ready === 0 && puzzles.length === 0) setPhase("empty");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      await loadQueue().catch(() => setPhase("empty"));
     }
-  }, [username, games, engineKind, threads, loadQueue, puzzles.length]);
+    await loadQueue().catch(() => setPhase("hub"));
+  }, [username, games, engineKind, threads, loadQueue]);
+
+  const markStatus = useCallback((id: number, status: Puzzle["status"]) => {
+    setPuzzles((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
+  }, []);
 
   const onDrop = useCallback(
     (args: { piece: { pieceType: string }; sourceSquare: string; targetSquare: string | null }): boolean => {
-      if (!puzzle || puzzlePhase !== "solving" || !args.targetSquare) return false;
+      if (!puzzle || puzzlePhase !== "solving" || wrongFen || !args.targetSquare) return false;
       const uci =
         args.sourceSquare +
         args.targetSquare +
@@ -219,20 +246,27 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
       }
       if (!made) return false; // illegal: piece snaps back, not an attempt
       if (uci !== puzzle.solutionUci) {
+        // let the move LAND, then grey the board + "retry" modal for a beat
+        setFen(ch.fen());
+        setWrongFen(ch.fen());
         void attemptPuzzleApi(puzzle.id, false).catch(() => {});
-        setFeedback("wrong");
-        return false;
+        if (wrongTimerRef.current) window.clearTimeout(wrongTimerRef.current);
+        wrongTimerRef.current = window.setTimeout(() => {
+          setWrongFen(null);
+          setFen(puzzle.fen);
+        }, WRONG_MS);
+        return true;
       }
       // solved!
       setPuzzlePhase("solved");
-      setFeedback("correct");
       setStreak((s) => s + 1);
+      markStatus(puzzle.id, "solved");
       void attemptPuzzleApi(puzzle.id, true).catch(() => {});
       setFen(ch.fen());
       void playLine(ch.fen(), (puzzle.pv?.length ? puzzle.pv.slice(1) : []));
       return true;
     },
-    [puzzle, puzzlePhase, fen, playLine],
+    [puzzle, puzzlePhase, fen, wrongFen, playLine, markStatus],
   );
 
   const reveal = useCallback(() => {
@@ -240,26 +274,37 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
     setPuzzlePhase("revealed");
     setHint("off");
     setStreak(0);
+    if (puzzle.status === "ready") markStatus(puzzle.id, "seen");
     void attemptPuzzleApi(puzzle.id, false, true).catch(() => {});
     void playLine(puzzle.fen, puzzle.pv?.length ? puzzle.pv : [puzzle.solutionUci]);
-  }, [puzzle, puzzlePhase, playLine]);
+  }, [puzzle, puzzlePhase, playLine, markStatus]);
 
   const retryAfterReveal = useCallback(() => {
     if (!puzzle) return;
     animRef.current += 1;
     setFen(puzzle.fen);
     setPuzzlePhase("solving");
-    setFeedback("");
   }, [puzzle]);
 
+  /** next unsolved (wrapping); when none is left, return to the hub */
   const next = useCallback(() => {
-    const firstOpen = puzzles.findIndex((p, i) => i > idx && p.status !== "solved");
-    if (firstOpen !== -1) setIdx(firstOpen);
-    else {
-      const anyOpen = puzzles.findIndex((p) => p.status !== "solved");
-      if (anyOpen !== -1) setIdx(anyOpen);
+    const after = puzzles.findIndex((p, i) => i > idx && p.status !== "solved");
+    if (after !== -1) {
+      setIdx(after);
+      return;
     }
+    const anyOpen = puzzles.findIndex((p) => p.status !== "solved");
+    if (anyOpen !== -1) setIdx(anyOpen);
+    else setPhase("hub");
   }, [puzzles, idx]);
+
+  const play = useCallback(() => {
+    if (unsolvedIdx === -1) void generate();
+    else {
+      setIdx(unsolvedIdx);
+      setPhase("playing");
+    }
+  }, [unsolvedIdx, generate]);
 
   const sourceGame = puzzle ? games.find((g) => g.id === puzzle.gameId) : undefined;
   const orientation: "white" | "black" = puzzle?.side === "b" ? "black" : "white";
@@ -270,7 +315,17 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
   const ghostBtn = `${btn} bg-btn text-ink-soft hover:bg-btn-hover`;
 
   const tierLabel = (p: Puzzle) =>
-    tierFor(p.ratingEst) === "easy" ? t("puzzleTierEasy") : tierFor(p.ratingEst) === "hard" ? t("puzzleTierHard") : t("puzzleTierMid");
+    tierFor(p.ratingEst) === "easy"
+      ? t("puzzleTierEasy")
+      : tierFor(p.ratingEst) === "hard"
+        ? t("puzzleTierHard")
+        : t("puzzleTierMid");
+
+  const statsLine = (
+    <span className="text-xs text-ink-faint">
+      {t("puzzleStatsLine", { solved: solvedCount, total: puzzles.length, streak })}
+    </span>
+  );
 
   // ---------------------------------------------------------------- render
 
@@ -315,46 +370,71 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
     );
   }
 
-  if (phase === "empty" || !puzzle) {
-    const analysed = games.some((g) => g.accuracy != null);
+  if (phase === "hub") {
+    return (
+      <div className="mx-auto max-w-[560px]">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <button
+            onClick={onExit}
+            className="rounded-md px-2 py-1 text-sm text-ink-mute transition hover:bg-btn hover:text-ink-soft"
+          >
+            {t("puzzlesBack")}
+          </button>
+          <h1 className="text-base font-semibold text-ink">{t("titlePuzzles")}</h1>
+          <span className="pt-1">{statsLine}</span>
+        </div>
+        <p className="mb-6 text-sm text-ink-mute">{t("puzzlesIntro")}</p>
+        {error && (
+          <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
+        )}
+        <div className="flex flex-col gap-3">
+          <button onClick={play} className={`${primaryBtn} justify-center py-2.5`}>
+            {unsolvedIdx === -1 && puzzles.length > 0
+              ? t("puzzlesGenerate")
+              : t("puzzlesPlay")}
+          </button>
+          {!(unsolvedIdx === -1 && puzzles.length > 0) && (
+            <button onClick={() => void generate()} className={`${ghostBtn} justify-center py-2.5`}>
+              {t("puzzlesGenerate")}
+            </button>
+          )}
+        </div>
+        {puzzles.length === 0 && unsolvedIdx === -1 && (
+          <p className="mt-4 text-center text-xs text-ink-faint">{t("puzzlesNoAnalysed")}</p>
+        )}
+      </div>
+    );
+  }
+
+  // ---- playing ----
+  if (!puzzle) {
+    // queue emptied behind our back: go back to the hub
     return (
       <div className="mx-auto max-w-[560px] text-center">
-        <h1 className="mb-1 text-lg font-semibold text-ink">{t("titlePuzzles")}</h1>
-        <p className="mb-6 text-sm text-ink-mute">{t("puzzlesIntro")}</p>
-        <div className="rounded-lg bg-card p-8 ring-1 ring-line">
-          {puzzles.length > 0 ? (
-            <p className="mb-4 text-sm text-ink-mute">{t("puzzlesQueueEmpty")}</p>
-          ) : !analysed && games.length > 0 ? (
-            <p className="mb-4 text-sm text-ink-mute">{t("puzzlesNoAnalysed")}</p>
-          ) : (
-            <p className="mb-4 text-sm text-ink-mute">{t("puzzlesIntro")}</p>
-          )}
-          {error && <p className="mb-4 text-sm text-danger">{error}</p>}
-          <button onClick={() => void generate()} className={primaryBtn}>
-            {t("puzzlesGenerate")}
-          </button>
-        </div>
+        <p className="mb-4 text-sm text-ink-mute">{t("puzzlesQueueEmpty")}</p>
+        <button onClick={() => void loadQueue()} className={ghostBtn}>
+          {t("puzzlesBack")}
+        </button>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-[560px]">
-      {/* header: counter + stats */}
+      {/* header: back to hub + counter + stats */}
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h1 className="text-base font-semibold text-ink">{t("titlePuzzles")}</h1>
+        <button
+          onClick={() => setPhase("hub")}
+          className="rounded-md px-2 py-1 text-sm text-ink-mute transition hover:bg-btn hover:text-ink-soft"
+        >
+          ← {t("titlePuzzles")}
+        </button>
         <span className="text-xs text-ink-faint">
-          {t("puzzleStatsLine", {
-            solved: solvedCount,
-            total: puzzles.length,
-            streak,
-          })}
-        </span>
-      </div>
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-        <span className="rounded-md bg-btn px-2 py-0.5 text-ink-soft">
           {t("puzzleCounter", { n: idx + 1, total: puzzles.length })}
         </span>
+        {statsLine}
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded-md bg-btn px-2 py-0.5 text-ink-soft">{tierLabel(puzzle)}</span>
         {puzzle.ratingEst != null && <span className="text-ink-faint">≈ {puzzle.ratingEst}</span>}
         {puzzlePhase !== "solving" && puzzle.punish && (
@@ -375,8 +455,16 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
             onPieceDrop: onDrop as never,
           }}
         />
-        {hint !== "off" && puzzlePhase === "solving" && (
+        {hint !== "off" && puzzlePhase === "solving" && !wrongFen && (
           <SquareRing square={puzzle.solutionUci.slice(0, 2)} wrapRef={boardWrapRef} orientation={orientation} />
+        )}
+        {wrongFen && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center rounded bg-black/50">
+            <div className="rounded-lg bg-card-solid px-5 py-3 text-center shadow-xl ring-1 ring-line-strong">
+              <div className="text-sm font-semibold text-danger">{t("puzzleWrongTitle")}</div>
+              <div className="mt-0.5 text-xs text-ink-faint">{t("puzzleTryAgain")}</div>
+            </div>
+          </div>
         )}
       </div>
 
@@ -397,15 +485,16 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
           </button>
         )}
         {hint === "count" && (
-          <span
-            className={`${btn} bg-amber-500/15 text-cat-opening ring-1 ring-amber-500/40`}
-            aria-label={t("puzzleHint")}
-          >
+          <span className={`${btn} bg-amber-500/15 text-cat-opening ring-1 ring-amber-500/40`} aria-label={t("puzzleHint")}>
             <BulbIcon /> {hintSecs}
           </span>
         )}
         {hint === "ready" && (
-          <button onClick={reveal} className={`${btn} bg-amber-500/20 text-cat-opening ring-1 ring-amber-500/50`} disabled={puzzlePhase === "solved"}>
+          <button
+            onClick={reveal}
+            className={`${btn} bg-amber-500/20 text-cat-opening ring-1 ring-amber-500/50`}
+            disabled={puzzlePhase === "solved"}
+          >
             <BulbIcon /> {t("puzzleShowSolution")}
           </button>
         )}
@@ -415,19 +504,24 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
           </button>
         )}
         <span className="ml-auto">
-          {feedback === "wrong" && <span className="text-sm text-danger">{t("puzzleTryAgain")}…</span>}
-          {feedback === "correct" && <span className="text-sm font-medium text-accent-soft-text">{t("puzzleCorrect")}</span>}
+          {puzzlePhase === "solved" && (
+            <span className="text-sm font-medium text-accent-soft-text">{t("puzzleCorrect")}</span>
+          )}
         </span>
       </div>
 
-      {/* after solve / reveal */}
+      {/* after solve / reveal - no generate button here (hub owns it) */}
       {puzzlePhase !== "solving" && (
         <div className="mt-3 rounded-lg bg-card p-4 ring-1 ring-line">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-ink-faint">{t("puzzleSolutionLabel")}:</span>
-            <span className="font-mono font-semibold text-ink">{puzzle.solutionSan ?? puzzle.solutionUci}</span>
+            <span className="font-mono font-semibold text-ink">
+              {puzzle.solutionSan ?? puzzle.solutionUci}
+            </span>
             <span className="rounded-md bg-btn px-2 py-0.5 text-xs text-ink-soft">
-              {puzzle.theme === "mate" ? t("puzzleThemeMate", { n: puzzle.mateLen ?? 1 }) : t("puzzleThemeWin")}
+              {puzzle.theme === "mate"
+                ? t("puzzleThemeMate", { n: puzzle.mateLen ?? 1 })
+                : t("puzzleThemeWin")}
             </span>
             {sourceGame && (
               <button onClick={() => onOpenGame(sourceGame, puzzle.ply)} className={`${ghostBtn} ml-auto text-xs`}>
@@ -435,12 +529,9 @@ export function PuzzleView({ username, games, engineKind, threads, onOpenGame, o
               </button>
             )}
           </div>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3">
             <button onClick={next} className={primaryBtn}>
               {t("puzzleNext")}
-            </button>
-            <button onClick={() => void generate()} className={ghostBtn}>
-              {t("puzzlesGenerate")}
             </button>
           </div>
         </div>

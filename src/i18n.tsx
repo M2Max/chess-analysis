@@ -111,7 +111,10 @@ const STRINGS = {
 
   // ---- puzzles (docs/FEATURE-PUZZLES.md) ----
   titlePuzzles: { it: "Puzzle", en: "Puzzles" },
-  puzzlesGenerate: { it: "Genera puzzle", en: "Generate puzzles" },
+  puzzlesGenerate: { it: "Genera nuovi puzzle", en: "Generate new puzzles" },
+  puzzlesPlay: { it: "Gioca puzzle", en: "Play Puzzles" },
+  puzzlesBack: { it: "Indietro", en: "Back" },
+  puzzleWrongTitle: { it: "Mossa sbagliata", en: "Wrong move" },
   puzzlesIntro: {
     it: "I puzzle nascono dalle Tue partite già analizzate: i momenti in cui c'era una mossa forte e l'hai vista (o no).",
     en: "Puzzles are born from Your own analysed games: the moments where a strong move was there and You saw it (or not).",
