@@ -59,7 +59,7 @@ export function SettingsView({ settings, onBack, onChange, onDemo }: Props) {
                   value={opt.kind}
                   checked={settings.engine === opt.kind}
                   onChange={() => onChange({ engine: opt.kind })}
-                  className="accent-emerald-500"
+                  className="accent-accent"
                 />
                 <span className="text-sm font-medium text-ink-soft">{opt.title}</span>
                 <span className="text-xs text-ink-faint">{t(opt.descKey)}</span>
@@ -84,7 +84,7 @@ export function SettingsView({ settings, onBack, onChange, onDemo }: Props) {
                     value={mode}
                     checked={settings.analysis === mode}
                     onChange={() => onChange({ analysis: mode })}
-                    className="accent-emerald-500"
+                    className="accent-accent"
                   />
                   <span className="text-sm font-medium text-ink-soft">
                     {t(mode === "fast" ? "analysisFastLabel" : "analysisDeepLabel")} (~

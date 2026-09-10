@@ -5,7 +5,7 @@ import type { CSSProperties } from "react";
  * Light squares = parchment tan, dark squares = walnut brown.
  */
 export const BOARD_LIGHT = "#dbc196";
-export const BOARD_DARK = "#572e22";
+export const BOARD_DARK = "#673728";
 
 export const boardLightSquareStyle: CSSProperties = { backgroundColor: BOARD_LIGHT };
 export const boardDarkSquareStyle: CSSProperties = { backgroundColor: BOARD_DARK };
