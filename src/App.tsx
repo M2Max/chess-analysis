@@ -432,7 +432,7 @@ function AppInner({
                 <p className="mb-4 text-sm text-ink-mute">{t("statsNeedUsername")}</p>
                 <button
                   onClick={() => setScreen("users")}
-                  className="rounded-md bg-accent-strong px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-strong-hover"
+                  className="rounded-md bg-accent-strong px-4 py-2 text-sm font-medium text-on-accent transition hover:bg-accent-strong-hover"
                 >
                   {t("goPlayers")}
                 </button>

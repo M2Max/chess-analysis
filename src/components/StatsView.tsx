@@ -248,7 +248,7 @@ export function StatsView({ games, username, onBack, onOpenGame }: Props) {
             </div>
             <button
               onClick={start}
-              className="rounded-md bg-accent-strong px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-strong-hover"
+              className="rounded-md bg-accent-strong px-6 py-2.5 text-sm font-semibold text-on-accent transition hover:bg-accent-strong-hover"
             >
               {done > 0 ? t("updateAnalysis", { done, total }) : t("startFull")}
             </button>

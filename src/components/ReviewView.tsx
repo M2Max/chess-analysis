@@ -23,6 +23,7 @@ import { usePreventPageZoom } from "../hooks/usePreventPageZoom";
 import { useI18n } from "../i18n";
 import { CategorySymbol } from "./CategorySymbol";
 import { BoardSymbol } from "./BoardSymbol";
+import { boardDarkSquareStyle, boardLightSquareStyle } from "./boardTheme";
 import { STAUNTY_PIECES } from "./pieces";
 import { BackIcon, FirstIcon, FlipIcon, LastIcon, NextIcon, PrevIcon } from "./NavIcons";
 import { EvalBar } from "./EvalBar";
@@ -528,7 +529,7 @@ export function ReviewView({
               <p className="mb-6 text-sm text-ink-mute">{state.error}</p>
               <button
                 onClick={onBack}
-                className="rounded-md bg-accent-strong px-4 py-2 text-sm font-medium text-white hover:bg-accent-strong-hover"
+                className="rounded-md bg-accent-strong px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-strong-hover"
               >
                 {t("backToGamesFull")}
               </button>
@@ -629,6 +630,8 @@ export function ReviewView({
                   boardOrientation: orientation,
                   animationDurationInMs: 120,
                   pieces: STAUNTY_PIECES,
+                  lightSquareStyle: boardLightSquareStyle,
+                  darkSquareStyle: boardDarkSquareStyle,
                   onPieceDrop: ({ piece, sourceSquare, targetSquare }) => {
                     if (!targetSquare) return false;
                     const promotes =
@@ -726,7 +729,7 @@ export function ReviewView({
             {upgradable && (state.progress?.done ?? 0) === 0 && (
               <button
                 onClick={upgrade}
-                className="rounded-md bg-accent-strong px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-strong-hover"
+                className="rounded-md bg-accent-strong px-3 py-1.5 text-xs font-semibold text-on-accent transition hover:bg-accent-strong-hover"
                 title={t("upgradableTitle", {
                   engine: upgradable.engine,
                   mode: upgradable.mode,

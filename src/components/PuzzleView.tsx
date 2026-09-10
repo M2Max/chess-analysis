@@ -13,6 +13,7 @@ import { getEngine } from "../engine/engine";
 import { useI18n } from "../i18n";
 import { generatePuzzles, type GenerateProgress } from "../puzzles/generate";
 import { tierFor } from "../puzzles/model";
+import { boardDarkSquareStyle, boardLightSquareStyle } from "./boardTheme";
 import { STAUNTY_PIECES } from "./pieces";
 import { Spinner } from "./Spinner";
 
@@ -311,7 +312,7 @@ export function PuzzleView({
 
   const btn =
     "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition disabled:opacity-40";
-  const primaryBtn = `${btn} bg-accent-strong text-white hover:bg-accent-strong-hover`;
+  const primaryBtn = `${btn} bg-accent-strong text-on-accent hover:bg-accent-strong-hover`;
   const ghostBtn = `${btn} bg-btn text-ink-soft hover:bg-btn-hover`;
 
   const tierLabel = (p: Puzzle) =>
@@ -452,6 +453,8 @@ export function PuzzleView({
             boardOrientation: orientation,
             animationDurationInMs: 200,
             pieces: STAUNTY_PIECES,
+            lightSquareStyle: boardLightSquareStyle,
+            darkSquareStyle: boardDarkSquareStyle,
             onPieceDrop: onDrop as never,
           }}
         />

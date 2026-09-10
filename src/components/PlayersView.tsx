@@ -395,7 +395,7 @@ function AddPlayerModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
           <button
             type="submit"
             disabled={busy || value.trim().length === 0}
-            className="rounded-md bg-accent-strong px-4 py-1.5 text-sm font-medium text-white transition hover:bg-accent-strong-hover disabled:opacity-50"
+            className="rounded-md bg-accent-strong px-4 py-1.5 text-sm font-medium text-on-accent transition hover:bg-accent-strong-hover disabled:opacity-50"
           >
             {t("addPlayerBtn")}
           </button>
