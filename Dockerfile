@@ -17,6 +17,9 @@ RUN bun install
 # Copy source and build (tsc typecheck + vite build; public/ → dist/)
 COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
 COPY src ./src
+# static assets (logo, favicons); .dockerignore keeps the big stockfish dirs
+# out of the context - postinstall re-creates them here before the build
+COPY public ./public
 RUN bun run build
 
 # ─── Production stage ────────────────────────────────────────────────────────
