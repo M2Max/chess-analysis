@@ -96,15 +96,15 @@
   --ink-soft: #44403c;
   --ink-mute: #57534e;
   --ink-faint: #78716c;
-  --btn: rgba(87, 46, 34, 0.06);
-  --btn-hover: rgba(87, 46, 34, 0.14);
+  --btn: rgba(103, 55, 40, 0.06);
+  --btn-hover: rgba(103, 55, 40, 0.14);
   --score: #ffffff;
-  /* brand accent: wood brown #572e22 on light */
-  --accent: #572e22;
-  --accent-strong: #572e22;
-  --accent-strong-hover: #43231a;
-  --accent-soft: rgba(87, 46, 34, 0.08);
-  --accent-soft-text: #572e22;
+  /* brand accent: wood brown #673728 on light */
+  --accent: #673728;
+  --accent-strong: #673728;
+  --accent-strong-hover: #4e2a1e;
+  --accent-soft: rgba(103, 55, 40, 0.08);
+  --accent-soft-text: #673728;
   --on-accent: #f7ead9;
   --danger: #b91c1c;
   --danger-soft: rgba(239, 68, 68, 0.08);
