@@ -9,18 +9,23 @@
 [![platforms: linux amd64 / arm64](https://img.shields.io/badge/platforms-linux%20amd64%20%7C%20arm64-64748b)](./docs/DEPLOYMENT.md)
 
 **Game review, entirely in your browser.** Add a chess.com player (track as
-many as you like), and Stockfish 18 (WASM) analyses every one of their
-last-30-days games on your device:
-per-move classification (`!!` `!` `?` `??` and friends), eval bar, advantage
-graph, top-3 engine lines, accuracy, and branching - drag any legal move off
-the mainline and it's evaluated immediately, with "Back to game" to return.
-No server computation, no API keys.
+many as you like) and Stockfish 18 (WASM) analyses their last-30-days games
+on your device: per-move classification (`!!` `!` `?` `??` and friends),
+eval bar, advantage graph, top-3 engine lines (clickable), thinking time for
+every move, accuracy, and branching - drag any legal move off the mainline and
+it's evaluated immediately, with "Back to game" to return. Missed wins and
+mates are distilled into **tactics puzzles** validated by the engine. No
+server computation, no API keys.
 
-| Games | Review |
+| Players | Games |
 |---|---|
-| <img src="images/list-dark.png" width="480"> | <img src="images/review-dark.png" width="480"> |
-| **Stats** | **Light mode** |
-| <img src="images/stats-dark.png" width="480"> | <img src="images/review-light.png" width="480"> |
+| <img src="images/players-dark.png" width="480"> | <img src="images/list-dark.png" width="480"> |
+| **Review** | **Stats** |
+| <img src="images/review-dark.png" width="480"> | <img src="images/stats-dark.png" width="480"> |
+| **Puzzles** | **Light mode** |
+| <img src="images/puzzles-dark.png" width="480"> | <img src="images/review-light.png" width="480"> |
+| **Review · mobile** | **Puzzle · mobile** |
+| <img src="images/mobile-review-dark.png" width="240"> | <img src="images/mobile-puzzles-dark.png" width="240"> |
 
 ## Features
 
@@ -35,6 +40,8 @@ No server computation, no API keys.
 - 📊 Per-player accuracy (expected-loss model, rating-scaled) and the
   engine's top-3 lines for every position
 - 🔀 Branching: explore any off-mainline line, evaluated on the fly
+- ⏱️ Thinking time on every move, read from the chess.com clock data and
+  shown next to each move (under it on mobile)
 - 📈 Stats view: resumable 30-day full-analysis run; win-probability curves
   (Stockfish's own WDL model) with the decisive move marked, a loss autopsy
   where every row jumps straight to the move that decided the game, a
@@ -44,10 +51,12 @@ No server computation, no API keys.
 - 🖱️ Every chart is interactive: exact values on hover, click to jump into
   the review at that move; engine best lines are clickable - tap a move to
   replay the line as an analysed branch
-- 🧩 Puzzles generated from your own analysed games (missed wins, missed
+- 🧩 Puzzles distilled from your own analysed games (missed wins, missed
   mates, punishment of your opponent's blunders) - engine-validated for a
-  unique sound solution, with difficulty tiers, a light-bulb hint
-  (piece highlight + countdown) and a jump back to the source game
+  unique sound solution, with difficulty tiers, a light-bulb hint (piece
+  highlight + 30s countdown, then the solution), wrong-move feedback and a
+  jump back to the source game; the hub tracks solved/unsolved and always
+  resumes where you left off
 - 📖 Opening recognition (Lichess CC0 dataset, 3,810 openings) with book
   moves marked on the board and in the move list
 - 🗄️ Server-side SQLite (bun:sqlite): games and analyses shared across all
