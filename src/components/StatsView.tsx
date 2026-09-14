@@ -516,6 +516,65 @@ function MotifsAndAutopsy({
     return decisive.slice(0, 15);
   }, [list, motifFilter]);
 
+  // same collapse pattern as the openings table: top N + ghost row + button
+  const [autopsyOpen, setAutopsyOpen] = useState(false);
+  useEffect(() => setAutopsyOpen(false), [motifFilter]);
+  const autopsyHasMore = autopsy.length > AUTOPSY_TOP;
+  const visibleAutopsy = autopsyHasMore && !autopsyOpen ? autopsy.slice(0, AUTOPSY_TOP) : autopsy;
+
+  const renderAutopsyRow = (g: GameSummary, ghost = false) => {
+    const imp = g.imp!;
+    const hit = motifFilter ? imp.motifs.filter((m) => m.motif === motifFilter) : [];
+    const focus = hit[0] ?? imp.drop;
+    const ply = focus && "ply" in focus ? focus.ply : null;
+    const dropVal: number = focus
+      ? "wp" in focus
+        ? (focus as { wp: number }).wp
+        : (focus as { drop: number }).drop
+      : 0;
+    const loss = outcomeOf(g);
+    return (
+      <li key={g.id} className={ghost ? "pointer-events-none select-none opacity-40" : ""}>
+        <button
+          className="flex w-full items-center gap-3 py-2 text-left transition hover:bg-btn"
+          onClick={() => {
+            const game = gameById.get(g.id);
+            if (game) onOpenGame(game, ply ?? undefined);
+          }}
+        >
+          <span className="w-32 min-w-0 shrink-0">
+            <span className={`block truncate text-sm font-medium ${loss === "loss" ? "text-danger" : "text-ink"}`}>
+              {loss === "loss" ? "−" : "+"} {g.oppName}
+            </span>
+            <span className="block truncate text-[10px] text-ink-faint">{t(TERM_KEY[imp.term])}</span>
+          </span>
+          <span className="min-w-0 flex-1">
+            <WpSpark wp={imp.wp} youWhite={g.youWhite} dropPly={imp.drop?.ply ?? null} />
+          </span>
+          <span className="w-40 shrink-0 text-right">
+            {focus ? (
+              <>
+                <span className="block text-xs font-medium tabular-nums text-ink">
+                  {t("moveNumber", { n: Math.floor(focus.ply / 2) + 1 })} · {focus.san}{" "}
+                  <span className="text-danger">−{Math.round(dropVal)}</span>
+                </span>
+                <span className="block truncate text-[10px] text-ink-faint">
+                  {motifFilter
+                    ? t(MOTIF_KEY[motifFilter])
+                    : imp.drop?.bestSan
+                      ? `${t("bestMoveWas")}: ${imp.drop.bestSan}`
+                      : t("biggestDrop")}
+                </span>
+              </>
+            ) : (
+              <span className="text-[10px] text-ink-faint">{t("reviewFromHere")}</span>
+            )}
+          </span>
+        </button>
+      </li>
+    );
+  };
+
   return (
     <section className={card}>
       <h2 className={cardTitle}>{t("secMotifs")}</h2>
@@ -528,62 +587,30 @@ function MotifsAndAutopsy({
 
       <h3 className="mb-1 mt-6 text-sm font-semibold text-ink-soft">{t("secAutopsy")}</h3>
       <p className="mb-2 text-xs text-ink-faint">{t("autopsyHint")}</p>
+      <div className="relative">
       <ul className="divide-y divide-line">
-        {autopsy.map((g) => {
-          const imp = g.imp!;
-          const hit = motifFilter ? imp.motifs.filter((m) => m.motif === motifFilter) : [];
-          const focus = hit[0] ?? imp.drop;
-          const ply = focus && "ply" in focus ? focus.ply : null;
-          const dropVal: number = focus
-            ? "wp" in focus
-              ? (focus as { wp: number }).wp
-              : (focus as { drop: number }).drop
-            : 0;
-          const loss = outcomeOf(g);
-          return (
-            <li key={g.id}>
-              <button
-                className="flex w-full items-center gap-3 py-2 text-left transition hover:bg-btn"
-                onClick={() => {
-                  const game = gameById.get(g.id);
-                  if (game) onOpenGame(game, ply ?? undefined);
-                }}
-              >
-                <span className="w-32 min-w-0 shrink-0">
-                  <span className={`block truncate text-sm font-medium ${loss === "loss" ? "text-danger" : "text-ink"}`}>
-                    {loss === "loss" ? "−" : "+"} {g.oppName}
-                  </span>
-                  <span className="block truncate text-[10px] text-ink-faint">
-                    {t(TERM_KEY[imp.term])}
-                  </span>
-                </span>
-                <span className="min-w-0 flex-1">
-                  <WpSpark wp={imp.wp} youWhite={g.youWhite} dropPly={imp.drop?.ply ?? null} />
-                </span>
-                <span className="w-40 shrink-0 text-right">
-                  {focus ? (
-                    <>
-                      <span className="block text-xs font-medium tabular-nums text-ink">
-                        {t("moveNumber", { n: Math.floor(focus.ply / 2) + 1 })} · {focus.san}{" "}
-                        <span className="text-danger">−{Math.round(dropVal)}</span>
-                      </span>
-                      <span className="block truncate text-[10px] text-ink-faint">
-                        {motifFilter
-                          ? t(MOTIF_KEY[motifFilter])
-                          : imp.drop?.bestSan
-                            ? `${t("bestMoveWas")}: ${imp.drop.bestSan}`
-                            : t("biggestDrop")}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-[10px] text-ink-faint">{t("reviewFromHere")}</span>
-                  )}
-                </span>
-              </button>
-            </li>
-          );
-        })}
+        {visibleAutopsy.map((g) => renderAutopsyRow(g))}
+        {autopsyHasMore && !autopsyOpen && renderAutopsyRow(autopsy[AUTOPSY_TOP], true)}
       </ul>
+      {autopsyHasMore && !autopsyOpen && (
+        <button
+          onClick={() => setAutopsyOpen(true)}
+          className="absolute inset-x-0 bottom-0 flex h-10 items-center justify-center rounded-b-lg bg-gradient-to-t from-card-solid via-card-solid/85 to-transparent text-xs font-medium text-ink-soft transition hover:text-ink"
+          aria-label={t("statsShowMore")}
+        >
+          {t("statsShowMore")} ↓
+        </button>
+      )}
+      {autopsyHasMore && autopsyOpen && (
+        <button
+          onClick={() => setAutopsyOpen(false)}
+          className="mt-1 w-full rounded-md py-1.5 text-xs font-medium text-ink-faint transition hover:bg-btn hover:text-ink-soft"
+          aria-label={t("statsShowLess")}
+        >
+          {t("statsShowLess")} ↑
+        </button>
+      )}
+      </div>
     </section>
   );
 }
@@ -809,11 +836,53 @@ function ResultFigures({ c }: { c: { total: number; wins: number; draws: number;
 }
 
 /** Opening frequency / results / performance / post-book gap table. */
+const OPENINGS_TOP = 5;
+const AUTOPSY_TOP = 5;
+
 function OpeningTable({ games }: { games: GameSummary[] }) {
   const { t } = useI18n();
   const rows = openingStats(games);
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = rows.length > OPENINGS_TOP;
+  const visible = hasMore && !expanded ? rows.slice(0, OPENINGS_TOP) : rows;
+
+  const renderRow = (r: (typeof rows)[number], i: number, ghost = false) => (
+    <tr key={i} className={`border-t border-line ${ghost ? "pointer-events-none select-none opacity-40" : ""}`}>
+      <td
+        className="max-w-[260px] truncate py-1.5 pr-3 text-ink-soft"
+        title={r.name ? `${r.name} (${r.eco})` : t("noBookMatch")}
+      >
+        {i < 5 && r.name && (
+          <span className="mr-1.5 inline-block align-[-0.1em] text-cat-opening">
+            <CategorySymbol category="opening" />
+          </span>
+        )}
+        {r.name ?? <span className="italic text-ink-faint">{t("noBookMatch")}</span>}{" "}
+        {r.eco ? <span className="text-xs text-ink-faint">{r.eco}</span> : null}
+      </td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-ink-soft">{r.count}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-accent-soft-text">{r.wins}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-ink-mute">{r.draws}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-danger">{r.losses}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-ink-soft">{fmtPct(r.winrate)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-ink-soft">{r.pr ?? "-"}</td>
+      <td
+        className="py-1.5 text-right tabular-nums"
+        title={r.postBookDrop != null ? `${r.postBookDrop.toFixed(1)} · ${t("postBookHint")}` : undefined}
+      >
+        {r.postBookDrop != null ? (
+          <span className={r.postBookDrop >= 8 ? "text-danger" : r.postBookDrop >= 4 ? "text-orange-400" : "text-ink-faint"}>
+            −{r.postBookDrop.toFixed(1)}
+          </span>
+        ) : (
+          <span className="text-ink-faint">-</span>
+        )}
+      </td>
+    </tr>
+  );
+
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-ink-faint">
@@ -830,42 +899,29 @@ function OpeningTable({ games }: { games: GameSummary[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-t border-line">
-              <td
-                className="max-w-[260px] truncate py-1.5 pr-3 text-ink-soft"
-                title={r.name ? `${r.name} (${r.eco})` : t("noBookMatch")}
-              >
-                {i < 5 && r.name && (
-                  <span className="mr-1.5 inline-block align-[-0.1em] text-cat-opening">
-                    <CategorySymbol category="opening" />
-                  </span>
-                )}
-                {r.name ?? <span className="italic text-ink-faint">{t("noBookMatch")}</span>}{" "}
-                {r.eco ? <span className="text-xs text-ink-faint">{r.eco}</span> : null}
-              </td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-ink-soft">{r.count}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-accent-soft-text">{r.wins}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-ink-mute">{r.draws}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-danger">{r.losses}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-ink-soft">{fmtPct(r.winrate)}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-ink-soft">{r.pr ?? "-"}</td>
-              <td
-                className="py-1.5 text-right tabular-nums"
-                title={r.postBookDrop != null ? `${r.postBookDrop.toFixed(1)} · ${t("postBookHint")}` : undefined}
-              >
-                {r.postBookDrop != null ? (
-                  <span className={r.postBookDrop >= 8 ? "text-danger" : r.postBookDrop >= 4 ? "text-orange-400" : "text-ink-faint"}>
-                    −{r.postBookDrop.toFixed(1)}
-                  </span>
-                ) : (
-                  <span className="text-ink-faint">-</span>
-                )}
-              </td>
-            </tr>
-          ))}
+          {visible.map((r, i) => renderRow(r, i))}
+          {/* collapsed hint: the (faded) 6th row peeking under the button */}
+          {hasMore && !expanded && renderRow(rows[OPENINGS_TOP], OPENINGS_TOP, true)}
         </tbody>
       </table>
+      {hasMore && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="absolute inset-x-0 bottom-0 flex h-10 items-center justify-center rounded-b-lg bg-gradient-to-t from-card-solid via-card-solid/85 to-transparent text-xs font-medium text-ink-soft transition hover:text-ink"
+          aria-label={t("statsShowMore")}
+        >
+          {t("statsShowMore")} ↓
+        </button>
+      )}
+      {hasMore && expanded && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="mt-1 w-full rounded-md py-1.5 text-xs font-medium text-ink-faint transition hover:bg-btn hover:text-ink-soft"
+          aria-label={t("statsShowLess")}
+        >
+          {t("statsShowLess")} ↑
+        </button>
+      )}
     </div>
   );
 }

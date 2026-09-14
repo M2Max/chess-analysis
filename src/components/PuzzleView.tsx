@@ -14,6 +14,7 @@ import { useI18n } from "../i18n";
 import { generatePuzzles, type GenerateProgress } from "../puzzles/generate";
 import { tierFor } from "../puzzles/model";
 import { boardDarkSquareStyle, boardLightSquareStyle } from "./boardTheme";
+import { useClickMove } from "./clickMove";
 import { STAUNTY_PIECES } from "./pieces";
 import { Spinner } from "./Spinner";
 
@@ -270,6 +271,22 @@ export function PuzzleView({
     [puzzle, puzzlePhase, fen, wrongFen, playLine, markStatus],
   );
 
+  // click-to-move: pick a piece, dots appear, click a dot to play it
+  // (onDrop already validates + applies promotion itself)
+  const click = useClickMove(
+    puzzlePhase === "solving" && !wrongFen ? fen : null,
+    (f, t) => {
+      let src: { type: string } | null | undefined = undefined;
+      try {
+        src = new Chess(fen).get(f as never);
+      } catch {
+        return;
+      }
+      onDrop({ piece: { pieceType: src?.type ?? "p" }, sourceSquare: f, targetSquare: t });
+    },
+    boardWrapRef,
+  );
+
   const reveal = useCallback(() => {
     if (!puzzle || puzzlePhase === "solved") return;
     setPuzzlePhase("revealed");
@@ -455,6 +472,7 @@ export function PuzzleView({
             pieces: STAUNTY_PIECES,
             lightSquareStyle: boardLightSquareStyle,
             darkSquareStyle: boardDarkSquareStyle,
+            squareStyles: click.styles,
             onPieceDrop: onDrop as never,
           }}
         />

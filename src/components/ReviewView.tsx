@@ -24,6 +24,7 @@ import { useI18n } from "../i18n";
 import { CategorySymbol } from "./CategorySymbol";
 import { BoardSymbol } from "./BoardSymbol";
 import { boardDarkSquareStyle, boardLightSquareStyle } from "./boardTheme";
+import { useClickMove } from "./clickMove";
 import { STAUNTY_PIECES } from "./pieces";
 import { BackIcon, FirstIcon, FlipIcon, LastIcon, NextIcon, PrevIcon } from "./NavIcons";
 import { EvalBar } from "./EvalBar";
@@ -517,6 +518,15 @@ export function ReviewView({
   // ---- derived view state -------------------------------------------------
   const curNodeIdx = state.line[state.cursor];
   const curNode = curNodeIdx != null ? state.nodes[curNodeIdx] : null;
+
+  // click-to-move: pick a piece, dots appear, click a dot to play it
+  const click = useClickMove(
+    curNode?.fen ?? null,
+    (f, t, p) => {
+      handleMove(f, t, p);
+    },
+    boardWrapRef,
+  );
   const meta = state.meta;
 
   if (state.status === "error" || (state.status === "loading" && !curNode)) {
@@ -632,6 +642,7 @@ export function ReviewView({
                   pieces: STAUNTY_PIECES,
                   lightSquareStyle: boardLightSquareStyle,
                   darkSquareStyle: boardDarkSquareStyle,
+                  squareStyles: click.styles,
                   onPieceDrop: ({ piece, sourceSquare, targetSquare }) => {
                     if (!targetSquare) return false;
                     const promotes =

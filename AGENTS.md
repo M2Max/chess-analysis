@@ -127,15 +127,30 @@ test fixture.
 
 ## Git remotes (asymmetric - be careful)
 
-- `origin` = **Gitea (LAN)**: full history, real infra details. Push main
-  normally.
+- **Push policy (user rule, 2026-09)**: ALWAYS commit and push to Gitea
+  (`origin main`) as part of shipping. Do **NOT** push to GitHub unless the
+  user explicitly says so in that turn. When told: run the sync below.
+- `origin` = **Gitea (LAN)**: full history, real infra details. HTTPS with
+  the user's self-signed cert (SAN IP); local trust via pinned leaf -
+  global git config `http.https://192.168.1.5:30900/.sslCAInfo` points to
+  `~/.config/gitea-lan/gitea-leaf.pem`. Never commit that cert (personal
+  data in subject).
 - `github` = **M2Max/chess-analysis (public)**: clean history only. NEVER
-  push local `main` (it contains LAN details in old commits). Flow:
-  `git fetch github && git checkout -B gh-sync github/main && git cherry-pick <new-commit> && git push github gh-sync:main`.
+  push local `main` (it contains LAN details in old commits). Snapshot
+  flow: `gh auth switch -u M2Max` (active account drifts!) then
+  `git fetch github && git checkout -B gh-sync github/main && git rm -rq --cached . && git checkout main -- . && git add -A && git commit && git push github gh-sync:main`,
+  finally `git checkout main && git branch -D gh-sync`.
   Branch protection: `build` check required; ruleset blocks deletion/force
   push. GHCR pull needs a packages-scoped PAT (OAuth tokens are refused).
 
 ## Gotchas
+
+- Click-to-move (`src/components/clickMove.ts`): react-chessboard v5 square
+  click/mouse callbacks are unreliable (dnd-kit swallows `click` on occupied
+  squares; touch `preventDefault` kills mobile compat mouse events). We listen
+  to POINTER events on WINDOW in capture phase and resolve squares from
+  coordinates; tap = down+up on the same square. Don't "simplify" back to
+  `onSquareClick`.
 
 - Renaming a module → restart the vite dev server (stale module graph 404s).
 - The Bun server does NOT hot-reload; restart it after touching `server/`.

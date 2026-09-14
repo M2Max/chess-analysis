@@ -514,6 +514,8 @@ const STRINGS = {
   gamesWord: { it: "{n} partite analizzate", en: "{n} games analysed" },
   thPerf: { it: "Prest.", en: "Perf." },
   thPostBook: { it: "Post-libro", en: "Post-book" },
+  statsShowMore: { it: "Mostra di più", en: "Show more" },
+  statsShowLess: { it: "Mostra di meno", en: "Show less" },
   postBookHint: {
     it: "aspettativa persa nelle tue prime 3 mosse dopo l'uscita dal libro", en: "expectation lost in your first 3 moves after leaving the book",
   },
