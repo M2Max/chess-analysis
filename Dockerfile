@@ -12,6 +12,10 @@ RUN npm install -g bun
 # (scripts/ must exist before `bun install` because of the postinstall hook.)
 COPY package.json bun.lock ./
 COPY scripts ./scripts
+# fetch-openings.ts imports the pure study builder from src/ (postinstall
+# runs before the full source copy - without this line the build dies on a
+# missing module)
+COPY src/openings ./src/openings
 RUN bun install
 
 # Copy source and build (tsc typecheck + vite build; public/ → dist/)

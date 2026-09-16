@@ -24,7 +24,6 @@
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "path";
 import { Chess } from "chess.js";
-import { buildStudy } from "../src/openings/studyData.ts";
 
 const BASE = "https://raw.githubusercontent.com/lichess-org/chess-openings/master/";
 const root = join(import.meta.dir, "..");
@@ -123,10 +122,18 @@ console.log(
 );
 
 // second output: the STUDY tree for the openings-study view (main openings +
-// first-tier variants; deep sub-lines hidden inside their parent variant)
-const study = buildStudy(rawRows);
-const studyJson = JSON.stringify({ v: 1, openings: study });
-await writeFile(join(publicDir, "opening-study.json"), studyJson);
-console.log(
-  `openings: ${study.length} main openings, ${study.reduce((s, o) => s + o.variants.length, 0)} variants → public/opening-study.json (${(studyJson.length / 1024).toFixed(0)} KB)`,
-);
+// first-tier variants; deep sub-lines hidden inside their parent variant).
+// DYNAMIC import on purpose: postinstall may run before src/ exists (Docker
+// layer order) - degrade silently, the study view just shows nothing until
+// the next fetch:openings.
+try {
+  const { buildStudy } = await import("../src/openings/studyData.ts");
+  const study = buildStudy(rawRows);
+  const studyJson = JSON.stringify({ v: 1, openings: study });
+  await writeFile(join(publicDir, "opening-study.json"), studyJson);
+  console.log(
+    `openings: ${study.length} main openings, ${study.reduce((s, o) => s + o.variants.length, 0)} variants → public/opening-study.json (${(studyJson.length / 1024).toFixed(0)} KB)`,
+  );
+} catch (e) {
+  console.warn(`openings: study tree skipped (${(e as Error).message}) - run bun run fetch:openings with src/ present`);
+}
