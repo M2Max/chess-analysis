@@ -109,6 +109,27 @@ const STRINGS = {
   goSettings: { it: "Vai alle impostazioni", en: "Go to settings" },
   goPlayers: { it: "Vai ai giocatori", en: "Go to players" },
 
+  // ---- openings study (docs/FEATURE-OPENINGS.md) ----
+  titleOpenings: { it: "Studio aperture", en: "Openings study" },
+  openingsSubtitle: {
+    it: "Impara le aperture giocando ogni variante mossa dopo mossa.",
+    en: "Learn openings by playing each variation move by move.",
+  },
+  openingsSearchPlaceholder: { it: "Cerca apertura…", en: "Search opening…" },
+  openingsNotFound: { it: "Nessuna apertura trovata.", en: "No openings found." },
+  openingsVariantsCount: { it: "{n} varianti", en: "{n} variations" },
+  openingsOngoing: { it: "In corso", en: "Ongoing" },
+  openingsAll: { it: "Tutte le aperture", en: "All openings" },
+  openingsFlip: { it: "Ruota la scacchiera", en: "Flip board" },
+  openingsMainLine: { it: "Linea principale", en: "Main line" },
+  openingsShow: { it: "Mostra", en: "Show" },
+  openingsNextVar: { it: "Prossima variante", en: "Next variation" },
+  openingsCompletedVariation: { it: "Variante completata!", en: "Variation completed!" },
+  openingsAllDone: {
+    it: "Hai completato tutte le varianti di questa apertura.",
+    en: "You completed every variation of this opening.",
+  },
+
   // ---- puzzles (docs/FEATURE-PUZZLES.md) ----
   titlePuzzles: { it: "Puzzle", en: "Puzzles" },
   puzzlesGenerate: { it: "Genera nuovi puzzle", en: "Generate new puzzles" },
@@ -144,6 +165,7 @@ const STRINGS = {
     en: "You finished the puzzles. Generate more after new games.",
   },
   puzzleCounter: { it: "Puzzle {n} di {total}", en: "Puzzle {n} of {total}" },
+  puzzleMoveCounter: { it: "Mossa {n}/{total}", en: "Move {n}/{total}" },
   puzzleStatsLine: {
     it: "{solved}/{total} risolti · {streak} di fila",
     en: "{solved}/{total} solved · {streak} streak",

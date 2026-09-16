@@ -21,11 +21,13 @@ describe("legalTargets", () => {
     expect([...t.values()].every((c) => c === false)).toBe(true);
   });
   test("marks captures (incl. en passant)", () => {
-    const ep = legalTargets("4k3/8/8/4p3/5P2/8/8/4K3 w - e6 0 1", "f4");
+    // white pawn on f5, black just played e7-e5 -> fxe6 en passant
+    const ep = legalTargets("4k3/8/8/4pP2/8/8/8/4K3 w - e6 0 1", "f5");
     expect(ep.get("e6")).toBe(true);
-    expect(ep.get("f5")).toBe(false);
-    const gtc = legalTargets("4k3/8/8/4p3/8/8/8/4K1R1 w - - 0 1", "g1");
-    expect(gtc.get("e5")).toBe(true);
+    expect(ep.get("f6")).toBe(false);
+    // rook on e1 sees the pawn on e5 (open file)
+    const rtc = legalTargets("4k3/8/8/4p3/8/8/8/4R1K1 w - - 0 1", "e1");
+    expect(rtc.get("e5")).toBe(true);
   });
   test("bad square / bad fen -> empty", () => {
     expect(legalTargets(START, "e5").size).toBe(0);
@@ -56,7 +58,7 @@ describe("clickMoveStyles", () => {
     expect(s.e2?.backgroundColor).toBeTruthy();
     expect(s.e3?.backgroundImage).toContain("radial-gradient(circle, rgba");
     // capture variant draws a ring (transparent centre)
-    const cap = clickMoveStyles("4k3/8/8/4p3/8/8/8/4K1R1 w - - 0 1", "g1");
+    const cap = clickMoveStyles("4k3/8/8/4p3/8/8/8/4R1K1 w - - 0 1", "e1");
     expect(cap.e5?.backgroundImage).toContain("transparent 56%");
   });
 });

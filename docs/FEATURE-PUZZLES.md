@@ -65,8 +65,11 @@ The app already stores, **per analysed game** (server SQLite,
   position *before* move *i*.
 
 ⇒ **Candidate selection costs zero engine time** — it's a pure pass over
-cached data. The engine (WASM, client-side, already in the app) is used only
-to *validate* the handful of candidates per game (≈5–15), ~1 s each.
+cached data. Extraction keeps **at most ONE candidate per game** — the
+highest-quality moment (mates first, shorter = better; then biggest swing) —
+so puzzles spread across many games instead of piling on one. The engine
+(WASM, client-side, already in the app) is used only to *validate* that
+candidate (~1 s per game).
 Server never runs an engine; architecture (client WASM + dumb server + SQLite)
 stays exactly as is.
 
@@ -135,6 +138,17 @@ orientation = their colour).
 Run the WASM Stockfish on the candidate position (full engine only;
 depth-targeted, `movetimeMs ≈ 1200` deep-mode budget, MultiPV ≥ 3):
 
+**Multi-move extension (migration v4, `solution_ucis`)**: after a candidate
+passes validation, `extendSolution()` walks the forced line deeper — each
+next position must stay FORCED (`forcedNext()`: unique best move by the cook
+margin, still ≥ soundCp or a ≤ mateMaxLen mate). Every user move along that
+walk becomes part of the solution: **up to 3 correct moves in a row** (the
+opponent's replies auto-play between them), so the puzzle tests that the
+user understands where the advantage comes from, not just the first shot.
+Positions that stop being forced stay classic single-move puzzles — the
+"sometimes" is decided by the position itself. Stored as a JSON array in
+`solution_ucis` (NULL = legacy); replies are the odd indices of `pv_json`.
+
 1. **Soundness**: best line score ≥ threshold (win ≥ +180cp or mate) *after*
    the engine sees the opponent's best defence — that's what the deep score
    already is (value under optimal play). Mate puzzles: mate ≤ 5.
@@ -155,8 +169,8 @@ never re-does work**.
 **Rank note**: uniqueness needs ≥3 meaningful MultiPV lines at decent depth.
 `lite` (10 MB) engine or `fast` mode lines are trustworthy for *selection*
 (the delta/category already in the cache), but validation always uses the
-full engine at the current mode's deep budget — bounded cost, ~5–15 positions
-per game.
+full engine at the current mode's deep budget — bounded cost, ≤1 position
+per game (the best candidate).
 
 ---
 

@@ -24,6 +24,7 @@ build-time) · bun:sqlite (WAL) · GitHub Actions → GHCR (amd64+arm64).
 - `src/engine/` UCI worker mgmt (`engine.ts`), analysis loop, classification (`classify.ts`), PGN/UCI parsing
 - `src/state/review.ts` review tree reducer (nodes + `line` + `cursor`)
 - `src/components/` UI · `src/stats/` runner + pure aggregation
+- `src/openings/` openings-study dataset logic (main openings + first-tier variants)
 - `src/i18n.tsx` ALL display strings (`STRINGS` as const, `{ it, en }`)
 - `server/` Bun HTTP server (`index.ts`) + SQLite layer (`db.ts`)
 - `docs/` architecture, deployment, security audit · `scripts/` fetch-*, debug/e2e (playwright-core)
@@ -33,7 +34,7 @@ build-time) · bun:sqlite (WAL) · GitHub Actions → GHCR (amd64+arm64).
 ```sh
 bun run dev          # vite (LAN host) :5173   - dev server, hot reload
 bun server/index.ts  # data API :3000          - required alongside vite in dev
-bun test             # 272 tests, no browser/WASM needed
+bun test             # 300 tests, no browser/WASM needed
 npx tsc -b           # typecheck (part of `bun run build`)
 ```
 
@@ -96,6 +97,12 @@ test fixture.
   dataset; game classified by walking forward while in-book; book moves =
   category `opening` (count 100 in accuracy). Missing index degrades
   silently.
+- **Openings study** (`docs/FEATURE-OPENINGS.md`): same TSVs also feed
+  `public/opening-study.json` (built by the same script via pure
+  `src/openings/studyData.ts`): 134 MAIN openings, deep sub-lines hidden
+  inside their first-tier ("frontier") variant. Drill = play the whole line
+  move by move; per-variation completion in SQLite `opening_progress`
+  (migration v5). The dataset is static, only progress is server-side.
 - **Stats run is resumable**: each completed game persists immediately;
   entry point always offers core budget (all / half / single - single is
   slower but less heat/power, matters on phones).
@@ -132,9 +139,10 @@ test fixture.
   user explicitly says so in that turn. When told: run the sync below.
 - `origin` = **Gitea (LAN)**: full history, real infra details. HTTPS with
   the user's self-signed cert (SAN IP); local trust via pinned leaf -
-  global git config `http.https://192.168.1.5:30900/.sslCAInfo` points to
-  `~/.config/gitea-lan/gitea-leaf.pem`. Never commit that cert (personal
-  data in subject).
+  global git config `http.<lan-ip>:<gitea-port>/.sslCAInfo` points to the
+  pinned leaf cert (`~/.config/gitea-lan/`). Never commit that cert
+  (personal data in subject) - real host/port live in machine-local git
+  config, not in this file (see "Placeholders only" rule above).
 - `github` = **M2Max/chess-analysis (public)**: clean history only. NEVER
   push local `main` (it contains LAN details in old commits). Snapshot
   flow: `gh auth switch -u M2Max` (active account drifts!) then

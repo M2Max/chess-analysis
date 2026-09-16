@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import type { Game } from "../api/games";
@@ -34,7 +34,11 @@ interface Props {
 const HINT_SECONDS = 30;
 const VALIDATION_MOVE_MS = 1500;
 /** how long the "wrong move" modal stays up before the board resets */
-const WRONG_MS = 1000;
+const WRONG_MS = 1400;
+/** how long the green "Correct!" flash shows before the continuation line plays */
+const CORRECT_FLASH_MS = 950;
+/** pause for a single auto-played move to animate */
+const STEP_MS = 480;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -125,8 +129,15 @@ export function PuzzleView({
   // modal; after WRONG_MS the board snaps back and the modal disappears
   const [wrongFen, setWrongFen] = useState<string | null>(null);
   const wrongTimerRef = useRef<number | null>(null);
+  // correct answer: brief green flash, then the continuation line animates
+  const [correctFlash, setCorrectFlash] = useState(false);
+  // multi-move puzzles: index of the expected user move + the position the
+  // current step starts from (wrong moves revert HERE, not to puzzle.fen)
+  const [solvedN, setSolvedN] = useState(0);
+  const [baseFen, setBaseFen] = useState("");
   const [streak, setStreak] = useState(0);
   const animRef = useRef(0); // invalidates pending pv animations on puzzle change
+  const lastPuzzleIdRef = useRef<number | null>(null);
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
 
   const puzzle: Puzzle | undefined = puzzles[idx];
@@ -149,17 +160,26 @@ export function PuzzleView({
     void loadQueue().catch(() => setPhase("hub"));
   }, [loadQueue]);
 
-  // reset per-puzzle state whenever the current puzzle changes
+  // reset per-puzzle state ONLY when the actual puzzle changes.
+  // markStatus() optimistically flips puzzle.status (and identity) right after
+  // a correct move; resetting on that would rewind the board to the starting
+  // position mid-play. Re-entry from the hub is forced via play().
   useEffect(() => {
+    const id = puzzle?.id ?? null;
+    if (id === lastPuzzleIdRef.current) return;
+    lastPuzzleIdRef.current = id;
     animRef.current += 1;
     if (wrongTimerRef.current) window.clearTimeout(wrongTimerRef.current);
     setWrongFen(null);
+    setCorrectFlash(false);
     if (!puzzle) return;
     setFen(puzzle.fen);
+    setBaseFen(puzzle.fen);
+    setSolvedN(0);
     setPuzzlePhase(puzzle.status === "solved" ? "solved" : "solving");
     setHint("off");
     setHintSecs(HINT_SECONDS);
-  }, [puzzle?.id, puzzle?.status, puzzle]);
+  }, [puzzle?.id, puzzle?.status, puzzle, phase]);
 
   // hint countdown
   useEffect(() => {
@@ -226,9 +246,16 @@ export function PuzzleView({
     setPuzzles((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
   }, []);
 
+  /** user moves to play in sequence (1..3); replies = odd indices of pv */
+  const expected = useMemo(() => {
+    if (!puzzle) return [] as string[];
+    const list = (puzzle.solutionUcis ?? []).filter((u) => typeof u === "string" && u.length >= 4);
+    return list.length > 1 ? list.slice(0, 3) : [puzzle.solutionUci];
+  }, [puzzle]);
+
   const onDrop = useCallback(
     (args: { piece: { pieceType: string }; sourceSquare: string; targetSquare: string | null }): boolean => {
-      if (!puzzle || puzzlePhase !== "solving" || wrongFen || !args.targetSquare) return false;
+      if (!puzzle || puzzlePhase !== "solving" || wrongFen || correctFlash || !args.targetSquare) return false;
       const uci =
         args.sourceSquare +
         args.targetSquare +
@@ -247,34 +274,71 @@ export function PuzzleView({
         made = null;
       }
       if (!made) return false; // illegal: piece snaps back, not an attempt
-      if (uci !== puzzle.solutionUci) {
-        // let the move LAND, then grey the board + "retry" modal for a beat
+      const want = expected[solvedN] ?? puzzle.solutionUci;
+      if (uci !== want) {
+        // let the move LAND, then grey the board + "retry" modal for a beat;
+        // revert to the CURRENT step position (not necessarily puzzle.fen)
         setFen(ch.fen());
         setWrongFen(ch.fen());
         void attemptPuzzleApi(puzzle.id, false).catch(() => {});
         if (wrongTimerRef.current) window.clearTimeout(wrongTimerRef.current);
         wrongTimerRef.current = window.setTimeout(() => {
           setWrongFen(null);
-          setFen(puzzle.fen);
+          setFen(baseFen);
         }, WRONG_MS);
         return true;
       }
-      // solved!
-      setPuzzlePhase("solved");
-      setStreak((s) => s + 1);
-      markStatus(puzzle.id, "solved");
-      void attemptPuzzleApi(puzzle.id, true).catch(() => {});
+      // correct move: green flash first — held long to register
+      const isFinal = solvedN + 1 >= expected.length;
       setFen(ch.fen());
-      void playLine(ch.fen(), (puzzle.pv?.length ? puzzle.pv.slice(1) : []));
+      setCorrectFlash(true);
+      const anim = animRef.current;
+      void (async () => {
+        await sleep(CORRECT_FLASH_MS);
+        if (animRef.current !== anim) return; // puzzle changed underneath: drop it
+        if (!isFinal) {
+          // intermediate step: play the opponent's forced reply, then demand
+          // the next user move
+          const reply = (puzzle.pv ?? [])[2 * solvedN + 1];
+          let nextFen = ch.fen();
+          if (reply) {
+            try {
+              ch.move({
+                from: reply.slice(0, 2),
+                to: reply.slice(2, 4),
+                promotion: reply.length > 4 ? reply.slice(4, 5) : undefined,
+              });
+              nextFen = ch.fen();
+              setFen(nextFen);
+            } catch {
+              // stale reply data: keep the position after our move
+            }
+          }
+          await sleep(STEP_MS);
+          if (animRef.current !== anim) return;
+          setCorrectFlash(false);
+          setBaseFen(nextFen);
+          setSolvedN((n) => n + 1);
+          return; // still solving, next move expected
+        }
+        // final correct move: solved!
+        setPuzzlePhase("solved");
+        setStreak((s) => s + 1);
+        markStatus(puzzle.id, "solved");
+        void attemptPuzzleApi(puzzle.id, true).catch(() => {});
+        setCorrectFlash(false);
+        const restIdx = 2 * solvedN + 1;
+        await playLine(ch.fen(), (puzzle.pv ?? []).length > restIdx ? puzzle.pv.slice(restIdx) : []);
+      })();
       return true;
     },
-    [puzzle, puzzlePhase, fen, wrongFen, playLine, markStatus],
+    [puzzle, puzzlePhase, fen, wrongFen, correctFlash, expected, solvedN, baseFen, playLine, markStatus],
   );
 
   // click-to-move: pick a piece, dots appear, click a dot to play it
   // (onDrop already validates + applies promotion itself)
   const click = useClickMove(
-    puzzlePhase === "solving" && !wrongFen ? fen : null,
+    puzzlePhase === "solving" && !wrongFen && !correctFlash ? fen : null,
     (f, t) => {
       let src: { type: string } | null | undefined = undefined;
       try {
@@ -301,6 +365,8 @@ export function PuzzleView({
     if (!puzzle) return;
     animRef.current += 1;
     setFen(puzzle.fen);
+    setBaseFen(puzzle.fen);
+    setSolvedN(0);
     setPuzzlePhase("solving");
   }, [puzzle]);
 
@@ -319,6 +385,8 @@ export function PuzzleView({
   const play = useCallback(() => {
     if (unsolvedIdx === -1) void generate();
     else {
+      // force the reset effect to re-init even when idx lands on the same id
+      lastPuzzleIdRef.current = null;
       setIdx(unsolvedIdx);
       setPhase("playing");
     }
@@ -455,6 +523,11 @@ export function PuzzleView({
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded-md bg-btn px-2 py-0.5 text-ink-soft">{tierLabel(puzzle)}</span>
         {puzzle.ratingEst != null && <span className="text-ink-faint">≈ {puzzle.ratingEst}</span>}
+        {expected.length > 1 && puzzlePhase !== "solved" && (
+          <span className="rounded-md bg-accent/15 px-2 py-0.5 font-medium text-accent-soft-text ring-1 ring-accent/40">
+            {t("puzzleMoveCounter", { n: Math.min(solvedN + 1, expected.length), total: expected.length })}
+          </span>
+        )}
         {puzzlePhase !== "solving" && puzzle.punish && (
           <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-cat-opening ring-1 ring-amber-500/40">
             {t("puzzlePunishTag")}
@@ -468,7 +541,7 @@ export function PuzzleView({
           options={{
             position: fen,
             boardOrientation: orientation,
-            animationDurationInMs: 200,
+            animationDurationInMs: 320,
             pieces: STAUNTY_PIECES,
             lightSquareStyle: boardLightSquareStyle,
             darkSquareStyle: boardDarkSquareStyle,
@@ -477,13 +550,24 @@ export function PuzzleView({
           }}
         />
         {hint !== "off" && puzzlePhase === "solving" && !wrongFen && (
-          <SquareRing square={puzzle.solutionUci.slice(0, 2)} wrapRef={boardWrapRef} orientation={orientation} />
+          <SquareRing
+            square={(expected[Math.min(solvedN, Math.max(expected.length - 1, 0))] ?? puzzle.solutionUci).slice(0, 2)}
+            wrapRef={boardWrapRef}
+            orientation={orientation}
+          />
         )}
         {wrongFen && (
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded bg-black/50">
             <div className="rounded-lg bg-card-solid px-5 py-3 text-center shadow-xl ring-1 ring-line-strong">
               <div className="text-sm font-semibold text-danger">{t("puzzleWrongTitle")}</div>
               <div className="mt-0.5 text-xs text-ink-faint">{t("puzzleTryAgain")}</div>
+            </div>
+          </div>
+        )}
+        {correctFlash && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded">
+            <div className="rounded-xl bg-emerald-600/95 px-7 py-3.5 shadow-2xl ring-1 ring-emerald-300/60">
+              <div className="text-base font-bold text-white">✓ {t("puzzleCorrect")}</div>
             </div>
           </div>
         )}

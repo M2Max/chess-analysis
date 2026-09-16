@@ -143,6 +143,8 @@ export interface Puzzle {
   theme: string | null;
   /** engine line (UCI), starts with the solution; shown after solving */
   pv: string[];
+  /** user moves to play IN SEQUENCE (max 3); null/1 = classic single move */
+  solutionUcis: string[] | null;
   punish: boolean;
   ratingEst: number | null;
   status: PuzzleStatus;
@@ -208,6 +210,10 @@ export interface ResolvePatch {
   mateLen?: number | null;
   theme?: string | null;
   ratingEst?: number | null;
+  /** multi-move extension validated during generation (max 3 user moves) */
+  solutionUcis?: string[] | null;
+  /** full validated line [user, reply, user, ...] */
+  pv?: string[];
 }
 
 export async function resolvePuzzleApi(
@@ -236,4 +242,43 @@ export async function attemptPuzzleApi(
     body: JSON.stringify({ solved, revealed }),
   });
   if (!res.ok) throw new Error(`puzzle attempt failed (${res.status})`);
+}
+
+// --- openings study (docs/FEATURE-OPENINGS.md) ------------------------------
+
+export interface OpeningProgress {
+  opening: string;
+  variantIndex: number;
+  completedAt: number;
+}
+
+export async function fetchOpeningProgress(username: string): Promise<OpeningProgress[]> {
+  const res = await fetch(`/api/db/openings-progress?username=${encodeURIComponent(username)}`);
+  if (!res.ok) throw new Error(`openings progress failed (${res.status})`);
+  const body = (await res.json()) as { progress: OpeningProgress[] };
+  return body.progress;
+}
+
+/** Mark one variation completed (idempotent). */
+export async function completeOpeningVariantApi(
+  username: string,
+  opening: string,
+  variantIndex: number,
+): Promise<void> {
+  const res = await fetch(`/api/db/openings-progress`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username, opening, variantIndex }),
+  });
+  if (!res.ok) throw new Error(`openings progress update failed (${res.status})`);
+}
+
+/** Forget all progress of one opening. */
+export async function resetOpeningProgressApi(username: string, opening: string): Promise<void> {
+  const res = await fetch(`/api/db/openings-progress/reset`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username, opening }),
+  });
+  if (!res.ok) throw new Error(`openings progress reset failed (${res.status})`);
 }

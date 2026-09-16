@@ -24,6 +24,7 @@
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "path";
 import { Chess } from "chess.js";
+import { buildStudy } from "../src/openings/studyData.ts";
 
 const BASE = "https://raw.githubusercontent.com/lichess-org/chess-openings/master/";
 const root = join(import.meta.dir, "..");
@@ -83,6 +84,7 @@ if (!fetchedOk) console.warn("openings: using a partially stale local copy of th
 
 // build the index
 const index = new Map<string, [string, string, number]>();
+const rawRows: { eco: string; name: string; pgn: string }[] = [];
 let entries = 0;
 let bad = 0;
 for (const f of files) {
@@ -95,6 +97,7 @@ for (const f of files) {
       continue;
     }
     const [eco, name, pgn] = parts;
+    rawRows.push({ eco, name, pgn });
     const sans = pgn.replace(/\d+\.(\.\.)?/g, " ").trim().split(/\s+/);
     const chess = new Chess();
     try {
@@ -117,4 +120,13 @@ await writeFile(outPath, json);
 const kb = (json.length / 1024).toFixed(0);
 console.log(
   `openings: ${entries} entries (${bad} skipped) → ${index.size} positions → public/openings.json (${kb} KB)`,
+);
+
+// second output: the STUDY tree for the openings-study view (main openings +
+// first-tier variants; deep sub-lines hidden inside their parent variant)
+const study = buildStudy(rawRows);
+const studyJson = JSON.stringify({ v: 1, openings: study });
+await writeFile(join(publicDir, "opening-study.json"), studyJson);
+console.log(
+  `openings: ${study.length} main openings, ${study.reduce((s, o) => s + o.variants.length, 0)} variants → public/opening-study.json (${(studyJson.length / 1024).toFixed(0)} KB)`,
 );

@@ -91,6 +91,53 @@ describe("extractCandidates", () => {
     expect(p.ratingEst).toBeLessThanOrEqual(2800);
   });
 
+  test("at most ONE puzzle per game - the best one (mate beats a plain win)", () => {
+    // same fixture, but now black ALSO misses Qd8-h4 "winning" on move 1
+    // (fabricated scores: swing ~280cp) -> two valid candidates, expect 1
+    const res = extractCandidates({
+      gameId: "g1",
+      parsed,
+      cached: cached([
+        m({
+          san: "f3",
+          uci: "f2f3",
+          color: "w",
+          category: "mistake",
+          multi: [
+            { uci: "d8h4", score: { cp: 300 }, pv: ["d8h4"] },
+            { uci: "e7e6", score: { cp: 20 }, pv: ["e7e6"] },
+          ],
+        }),
+        m({ san: "e6", uci: "e7e6", color: "b", category: "mistake" }),
+        m({
+          san: "g4",
+          uci: "g2g4",
+          color: "w",
+          category: "blunder",
+          multi: [
+            { uci: "d8h4", score: { mate: 1 }, pv: ["d8h4"] },
+            { uci: "d7d5", score: { cp: -50 }, pv: ["d7d5"] },
+          ],
+        }),
+        m({
+          san: "d5",
+          uci: "d7d5",
+          color: "b",
+          category: "blunder",
+          bestUci: "d8h4",
+          bestSan: "Qh4#",
+          score: { cp: 50 },
+        }),
+        m({ san: "a4", uci: "a2a4", color: "w" }),
+      ]),
+      playerColor: "b",
+      baseRating: 1000,
+    });
+    expect(res.length).toBe(1);
+    expect(res[0].ply).toBe(3); // the mate-in-1 wins the cut, not the earlier move
+    expect(res[0].mateLen).toBe(1);
+  });
+
   test("includePunish=false drops blunder-punishment candidates", () => {
     const base = [
       m({ san: "f3", uci: "f2f3", color: "w", category: "opening" }),

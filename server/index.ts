@@ -10,6 +10,7 @@ import {
 import type { CachedAnalysis } from "../src/api/analysisCache";
 import {
   attemptPuzzle,
+  completeOpeningVariant,
   countPuzzlesByStatus,
   deletePlayer,
   getAnalysis,
@@ -17,9 +18,11 @@ import {
   getPuzzle,
   getStatsForPlayer,
   listIsFresh,
+  listOpeningProgress,
   listPlayers,
   listPuzzles,
   puzzleGameIds,
+  resetOpeningProgress,
   resolvePuzzle,
   saveAnalysisForGame,
   savePlayerProfile,
@@ -251,7 +254,15 @@ export async function handleDbApi(req: Request, url: URL): Promise<Response | nu
       id?: unknown;
       ok?: unknown;
       failReason?: unknown;
-      patch?: { solutionUci?: string; solutionSan?: string | null; mateLen?: number | null; theme?: string | null; ratingEst?: number | null };
+      patch?: {
+        solutionUci?: string;
+        solutionSan?: string | null;
+        mateLen?: number | null;
+        theme?: string | null;
+        ratingEst?: number | null;
+        solutionUcis?: string[] | null;
+        pv?: string[];
+      };
     };
     if (typeof body.id !== "number" || typeof body.ok !== "boolean") return json({ error: "invalid-payload" }, 400);
     const puzzle = resolvePuzzle(body.id, body.ok, typeof body.failReason === "string" ? body.failReason : null, body.patch);
@@ -270,6 +281,60 @@ export async function handleDbApi(req: Request, url: URL): Promise<Response | nu
     const puzzle = attemptPuzzle(id, { solved: body.solved, revealed: body.revealed === true });
     if (!puzzle) return json({ error: "not found" }, 404);
     return json({ puzzle });
+  }
+
+  // ---- openings study (docs/FEATURE-OPENINGS.md) -------------------------
+  // the dataset is static (public/opening-study.json); the server only keeps
+  // per-player completion of variations
+
+  // GET /api/db/openings-progress?username=
+  if (parts[1] === "openings-progress" && parts.length === 2 && req.method === "GET") {
+    const username = url.searchParams.get("username") ?? "";
+    if (!/^[A-Za-z0-9_]{2,25}$/.test(username)) return json({ error: "invalid username" }, 400);
+    return json({ progress: listOpeningProgress(username) });
+  }
+
+  // POST /api/db/openings-progress {username, opening, variantIndex} - complete one
+  if (parts[1] === "openings-progress" && parts.length === 2 && req.method === "POST") {
+    const parsed = await readJsonBody(req);
+    if ("error" in parsed) return json({ error: parsed.error }, parsed.error === "payload too large" ? 413 : 400);
+    const body = parsed.value as { username?: unknown; opening?: unknown; variantIndex?: unknown };
+    if (
+      typeof body.username !== "string" ||
+      !/^[A-Za-z0-9_]{2,25}$/.test(body.username) ||
+      typeof body.opening !== "string" ||
+      body.opening.length === 0 ||
+      body.opening.length > 200 ||
+      !Number.isInteger(body.variantIndex) ||
+      (body.variantIndex as number) < 0 ||
+      (body.variantIndex as number) > 999
+    ) {
+      return json({ error: "invalid-payload" }, 400);
+    }
+    completeOpeningVariant(body.username, body.opening, body.variantIndex as number);
+    return json({ ok: true });
+  }
+
+  // POST /api/db/openings-progress/reset {username, opening} - forget one opening
+  if (
+    parts[1] === "openings-progress" &&
+    parts[2] === "reset" &&
+    parts.length === 3 &&
+    req.method === "POST"
+  ) {
+    const parsed = await readJsonBody(req);
+    if ("error" in parsed) return json({ error: parsed.error }, parsed.error === "payload too large" ? 413 : 400);
+    const body = parsed.value as { username?: unknown; opening?: unknown };
+    if (
+      typeof body.username !== "string" ||
+      !/^[A-Za-z0-9_]{2,25}$/.test(body.username) ||
+      typeof body.opening !== "string" ||
+      body.opening.length === 0 ||
+      body.opening.length > 200
+    ) {
+      return json({ error: "invalid-payload" }, 400);
+    }
+    return json({ ok: true, removed: resetOpeningProgress(body.username, body.opening) });
   }
 
   // GET /api/db/players/{u}/games[?refresh=1&from=&to=]
@@ -391,6 +456,12 @@ serve({
     }
     if (existsSync(full) && statSync(full).isFile()) {
       return new Response(Bun.file(full), { headers: ISOLATION_HEADERS });
+    }
+    // A missing ASSET (anything with a file extension, e.g. /favicon-32.png)
+    // must 404, never fall back to index.html: browsers cache that 200-HTML
+    // and then show blank tab icons until the cache is cleared.
+    if (/\.[a-z0-9]{2,5}$/i.test(rel)) {
+      return new Response("not found", { status: 404, headers: ISOLATION_HEADERS });
     }
     const index = join(DIST, "index.html");
     if (!existsSync(index)) {

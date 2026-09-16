@@ -170,6 +170,23 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_puzzles_user_status ON puzzles(username, status);
   `,
+  // v4 - multi-move puzzles: the user must play UP TO 3 correct moves in a
+  // row (JSON array of UCI; opponent replies are the odd indices of pv_json).
+  // NULL = legacy single-solution puzzle (solution_uci only).
+  `ALTER TABLE puzzles ADD COLUMN solution_ucis TEXT`,
+
+  // v5 - openings study: one row per COMPLETED variation of an opening
+  // (index 0 = main line, 1..n = first-tier variants; the dataset itself is
+  // static and ships as public/opening-study.json).
+  `
+  CREATE TABLE opening_progress (
+    username TEXT NOT NULL COLLATE NOCASE,
+    opening TEXT NOT NULL,                -- exact top-level opening name
+    variant_index INTEGER NOT NULL,       -- 0 = main line
+    completed_at INTEGER NOT NULL,        -- unix ms
+    PRIMARY KEY (username, opening, variant_index)
+  );
+  `,
 ];
 
 let db: Database | null = null;
@@ -761,6 +778,7 @@ export function deletePlayer(username: string): {
     if (!player) return { removed: false, gamesRemoved: 0, analysesRemoved: 0 };
 
     d.run("DELETE FROM puzzles WHERE username = ?", [username.trim()]);
+    d.run("DELETE FROM opening_progress WHERE username = ?", [username.trim()]);
     d.run("DELETE FROM players WHERE id = ?", [player.id]);
 
     const orphans = d
@@ -798,6 +816,8 @@ export interface PuzzleRow {
   theme: string | null;
   /** engine line (UCI) played out after solving; starts with the solution */
   pv: string[];
+  /** user moves to play in sequence (max 3); null = legacy single solution */
+  solutionUcis: string[] | null;
   punish: boolean;
   ratingEst: number | null;
   status: string;
@@ -841,10 +861,12 @@ interface PuzzleDbRow {
   attempts: number;
   solved_at: number | null;
   created_at: number;
+  solution_ucis: string | null;
 }
 
 const PUZZLE_COLS = `id, username, game_id, ply, fen, side, solution_uci, solution_san,
-  mate_len, theme, pv_json, punish, rating_est, status, fail_reason, attempts, solved_at, created_at`;
+  mate_len, theme, pv_json, punish, rating_est, status, fail_reason, attempts, solved_at, created_at,
+  solution_ucis`;
 
 function safeParseArr(s: string): string[] {
   try {
@@ -868,6 +890,7 @@ function toPuzzle(r: PuzzleDbRow): PuzzleRow {
     mateLen: r.mate_len,
     theme: r.theme,
     pv: safeParseArr(r.pv_json),
+    solutionUcis: r.solution_ucis ? safeParseArr(r.solution_ucis) : null,
     punish: r.punish === 1,
     ratingEst: r.rating_est,
     status: r.status,
@@ -967,14 +990,28 @@ export function resolvePuzzle(
   id: number,
   ok: boolean,
   failReason: string | null,
-  patch?: { solutionUci?: string; solutionSan?: string | null; mateLen?: number | null; theme?: string | null; ratingEst?: number | null },
+  patch?: {
+    solutionUci?: string;
+    solutionSan?: string | null;
+    mateLen?: number | null;
+    theme?: string | null;
+    ratingEst?: number | null;
+    /** multi-move extension (max 3 user moves); replaces the whole sequence */
+    solutionUcis?: string[] | null;
+    /** full line [user, reply, user, ...] validated during generation */
+    pv?: string[];
+  },
 ): PuzzleRow | null {
   const d = getDb();
   const cur = getPuzzle(id);
   if (!cur) return null;
+  const ucisIn = Array.isArray(patch?.solutionUcis)
+    ? patch!.solutionUcis!.filter((x) => typeof x === "string" && x.length >= 4).slice(0, 3)
+    : null;
   d.run(
     `UPDATE puzzles SET status = ?, fail_reason = ?,
-       solution_uci = ?, solution_san = ?, mate_len = ?, theme = ?, rating_est = ?
+       solution_uci = ?, solution_san = ?, mate_len = ?, theme = ?, rating_est = ?,
+       solution_ucis = ?, pv_json = ?
      WHERE id = ?`,
     [
       ok ? "ready" : "rejected",
@@ -984,6 +1021,10 @@ export function resolvePuzzle(
       patch?.mateLen ?? cur.mateLen,
       patch?.theme ?? cur.theme,
       patch?.ratingEst ?? cur.ratingEst,
+      ucisIn && ucisIn.length > 1 ? JSON.stringify(ucisIn) : null,
+      Array.isArray(patch?.pv) && patch!.pv!.length > 0
+        ? JSON.stringify(patch!.pv!.filter((x) => typeof x === "string").slice(0, 9))
+        : JSON.stringify(cur.pv ?? []),
       id,
     ],
   );
@@ -1016,4 +1057,50 @@ export function attemptPuzzle(
     d.run("UPDATE puzzles SET attempts = attempts + 1 WHERE id = ?", [id]);
   }
   return getPuzzle(id);
+}
+
+// --- openings study (migration v5) -----------------------------------------
+
+export interface OpeningProgressRow {
+  opening: string;
+  variantIndex: number;
+  completedAt: number;
+}
+
+/** All completed variations of every opening, for one player. */
+export function listOpeningProgress(username: string): OpeningProgressRow[] {
+  const d = getDb();
+  const rows = d
+    .query(
+      `SELECT opening, variant_index AS variantIndex, completed_at AS completedAt
+         FROM opening_progress WHERE username = ?`,
+    )
+    .all(username.trim()) as OpeningProgressRow[];
+  return rows;
+}
+
+/** Mark one variation as completed (idempotent upsert). */
+export function completeOpeningVariant(
+  username: string,
+  opening: string,
+  variantIndex: number,
+): void {
+  const d = getDb();
+  d.run(
+    `INSERT INTO opening_progress (username, opening, variant_index, completed_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(username, opening, variant_index) DO UPDATE SET completed_at = excluded.completed_at`,
+    [username.trim(), opening, variantIndex, Date.now()],
+  );
+}
+
+/** Forget all progress of ONE opening (re-learn it). Returns rows removed. */
+export function resetOpeningProgress(username: string, opening: string): number {
+  const d = getDb();
+  return d
+    .run("DELETE FROM opening_progress WHERE username = ? AND opening = ?", [
+      username.trim(),
+      opening,
+    ])
+    .changes;
 }

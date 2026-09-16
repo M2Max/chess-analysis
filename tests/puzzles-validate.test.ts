@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { parsePgn } from "../src/engine/parse";
 import type { AnalysisResult, ScoreInfo } from "../src/engine/stockfish";
-import { validateVerdict } from "../src/puzzles/validate";
+import { forcedNext, validateVerdict } from "../src/puzzles/validate";
 
 const PGN = `[TimeControl "600+0"]
 1. f3 e6 2. g4 d5 3. a4 *`;
@@ -116,5 +116,48 @@ describe("validateVerdict", () => {
       "d8h4",
     );
     expect(v).toEqual({ ok: false, reason: "stale" });
+  });
+});
+
+describe("forcedNext", () => {
+  test("unique winning move -> step with user + reply", () => {
+    const s = forcedNext(
+      res([
+        line({ score: { cp: 500 }, pv: ["e2e4", "e7e5", "g1f3"] }),
+        line({ score: { cp: 300 }, pv: ["d2d4", "d7d5"] }),
+      ]),
+    );
+    expect(s).not.toBeNull();
+    expect(s!.userUci).toBe("e2e4");
+    expect(s!.replyUci).toBe("e7e5");
+  });
+  test("score below sound bar -> null (stop extending)", () => {
+    expect(
+      forcedNext(
+        res([
+          line({ score: { cp: 100 }, pv: ["e2e4"] }),
+          line({ score: { cp: 50 }, pv: ["d2d4"] }),
+        ]),
+      ),
+    ).toBeNull();
+  });
+  test("no unique best (margin too small) -> null", () => {
+    expect(
+      forcedNext(
+        res([
+          line({ score: { cp: 500 }, pv: ["e2e4"] }),
+          line({ score: { cp: 460 }, pv: ["d2d4"] }),
+        ]),
+      ),
+    ).toBeNull();
+  });
+  test("mate vs non-mate -> forced; mate longer than maxLen -> null", () => {
+    expect(
+      forcedNext(res([line({ score: { mate: 2 }, pv: ["d1h5"] }), line({ score: { cp: 400 }, pv: ["e2e4"] })]))
+        ?.userUci,
+    ).toBe("d1h5");
+    expect(
+      forcedNext(res([line({ score: { mate: 8 }, pv: ["d1h5"] }), line({ score: { cp: 900 }, pv: ["e2e4"] })])),
+    ).toBeNull();
   });
 });

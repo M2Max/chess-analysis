@@ -11,6 +11,7 @@ import { ReviewView } from "./components/ReviewView";
 import { SettingsView } from "./components/SettingsView";
 import { StatsView } from "./components/StatsView";
 import { PuzzleView } from "./components/PuzzleView";
+import { OpeningsView } from "./components/OpeningsView";
 import { getEngine } from "./engine/engine";
 import { LANGS, I18nProvider, useI18n, type Lang, type TFn } from "./i18n";
 import { clearLegacyUsername, legacyUsername, loadSettings, saveSettings, type Settings } from "./settings";
@@ -19,7 +20,7 @@ interface ListData extends PlayerList {
   username: string;
 }
 
-type Screen = "users" | "list" | "review" | "stats" | "puzzles" | "settings";
+type Screen = "users" | "list" | "review" | "stats" | "openings" | "puzzles" | "settings";
 
 function friendlyError(e: unknown, t: TFn): string {
   if (e instanceof UnknownPlayerError) return t("errorPlayerNotFound");
@@ -79,6 +80,8 @@ function AppInner({
   );
   /** when opened from the stats autopsy: ply to park the cursor on */
   const [reviewPly, setReviewPly] = useState<number | null>(null);
+  /** openings study: drilled opening (null = list); lives here for history */
+  const [studyOpeningKey, setStudyOpeningKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [langOpen, setLangOpen] = useState(false);
@@ -192,7 +195,9 @@ function AppInner({
           ? `stats|${list?.username ?? ""}|`
           : screen === "puzzles"
             ? `puzzles|${list?.username ?? ""}|`
-            : screen === "settings"
+            : screen === "openings"
+              ? `openings|${list?.username ?? ""}|${studyOpeningKey ?? ""}`
+              : screen === "settings"
               ? "settings||"
               : "users||";
 
@@ -235,6 +240,9 @@ function AppInner({
         setScreen("stats");
       } else if (scr === "puzzles") {
         setScreen("puzzles");
+      } else if (scr === "openings") {
+        setStudyOpeningKey(gid || null);
+        setScreen("openings");
       } else if (scr === "settings") {
         setScreen("settings");
       } else {
@@ -341,6 +349,24 @@ function AppInner({
             </svg>
           </button>
           <button
+            onClick={() => {
+              setStudyOpeningKey(null);
+              setScreen("openings");
+            }}
+            title={t("titleOpenings")}
+            aria-label={t("titleOpenings")}
+            className={`${iconBtn} ${screen === "openings" ? "text-accent" : ""} ${
+              screen === "users" || screen === "settings" ? "hidden" : ""
+            }`}
+          >
+            {/* stack of books, monochrome */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M5 4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2H7a2 2 0 0 1-2-2v0z" opacity=".9" transform="translate(0 .5)" />
+              <path d="M4 8.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2H6a2 2 0 0 1-2-2v0z" transform="translate(0 .5)" />
+              <path d="M3 13a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6zm4 .5v3h8v-3H7z" fillRule="evenodd" />
+            </svg>
+          </button>
+          <button
             onClick={() => setScreen("puzzles")}
             title={t("titlePuzzles")}
             aria-label={t("titlePuzzles")}
@@ -439,6 +465,15 @@ function AppInner({
               </div>
             </div>
           ))}
+
+        {screen === "openings" && (
+          <OpeningsView
+            username={list?.username ?? ""}
+            selectedKey={studyOpeningKey}
+            onSelect={(k) => setStudyOpeningKey(k)}
+            onExit={() => setScreen(list ? "list" : "users")}
+          />
+        )}
 
         {screen === "puzzles" && (
           <PuzzleView

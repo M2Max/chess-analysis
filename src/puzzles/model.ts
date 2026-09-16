@@ -41,8 +41,12 @@ export const PUZZLE_T = {
   cookMarginCp: 80,
   /** long mates are usually not forced at our search depth */
   mateMaxLen: 5,
-  /** keep generation cost bounded per game */
-  maxPerGame: 8,
+  /** at most ONE puzzle per game: the highest-quality moment (mates first,
+   * then biggest swing) - variety across games beats piling on one game */
+  maxPerGame: 1,
+  /** a puzzle may demand up to this many correct user moves in a row when
+   * every intermediate position stays forced (mate lines / won endings) */
+  maxSolutionMoves: 3,
 };
 
 const MATE_CP = 100000;
@@ -125,7 +129,9 @@ export function extractCandidates(opts: ExtractOptions): PuzzleCandidate[] {
   const out: PuzzleCandidate[] = [];
   const seen = new Set<string>();
 
-  for (let i = 1; i < n && out.length < PUZZLE_T.maxPerGame; i++) {
+  // collect ALL candidates first, then keep only the best `maxPerGame` -
+  // stopping at the first N would keep the EARLIEST, not the BEST
+  for (let i = 1; i < n; i++) {
     const mv = moves[i];
     if (mv.color !== playerColor) continue;
     if (mv.category === "opening") continue; // book move: not a training moment
@@ -208,5 +214,10 @@ export function extractCandidates(opts: ExtractOptions): PuzzleCandidate[] {
       ratingEst,
     });
   }
-  return out;
+
+  // quality: mates outrank winning moves (shorter mate = better), then raw swing
+  const quality = (c: PuzzleCandidate) =>
+    (c.mateLen != null ? 100000 - c.mateLen * 1000 : 0) + Math.min(c.swingCp, 1500);
+  out.sort((a, b) => quality(b) - quality(a));
+  return out.slice(0, PUZZLE_T.maxPerGame);
 }

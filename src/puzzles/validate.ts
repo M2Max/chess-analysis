@@ -10,6 +10,40 @@ import { isMateScore, PUZZLE_T, scoreCp } from "./model";
 
 export type RejectReason = "cooked" | "unsound" | "stale";
 
+/** one forcing step of a multi-move solution */
+export interface ForcedStep {
+  /** the (unique) best move for the side to move = the puzzle's user move */
+  userUci: string;
+  /** best reply by the opponent (null when the line ends / mates here) */
+  replyUci: string | null;
+  mate: boolean;
+  cp: number;
+  pv: string[];
+}
+
+/**
+ * Is this search a FORCING continuation for the side to move? (unique best
+ * move, still winning or mating) - used to extend a puzzle with additional
+ * user moves. Same bar as validateVerdict, applied mid-line.
+ */
+export function forcedNext(res: AnalysisResult): ForcedStep | null {
+  const lines = res.multipv?.length ? res.multipv : res.info ? [res.info] : [];
+  const best = lines[0];
+  if (!best || best.pv.length === 0) return null;
+  const mate = isMateScore(best.score);
+  const cp = scoreCp(best.score);
+  if (!mate && cp < PUZZLE_T.soundCp) return null;
+  if (mate && Math.abs(best.score.mate!) > PUZZLE_T.mateMaxLen) return null;
+  const second = lines[1];
+  if (second && second.pv.length > 0) {
+    const secondMate = isMateScore(second.score);
+    if (mate) {
+      if (secondMate && Math.abs(second.score.mate!) - Math.abs(best.score.mate!) <= 1) return null;
+    } else if (!secondMate && cp - scoreCp(second.score) < PUZZLE_T.cookMarginCp) return null;
+  }
+  return { userUci: best.pv[0], replyUci: best.pv[1] ?? null, mate, cp, pv: best.pv };
+}
+
 export type Verdict =
   | {
       ok: true;
@@ -28,6 +62,7 @@ export type Verdict =
  * accepted ONLY if it is still the engine's unique best first move.
  */
 export function validateVerdict(res: AnalysisResult, fen: string, solutionUci: string): Verdict {
+  // (uniqueness/soundness bar shared with forcedNext)
   const lines = res.multipv?.length ? res.multipv : res.info ? [res.info] : [];
   const best = lines[0];
   if (!best || best.pv.length === 0) return { ok: false, reason: "stale" };

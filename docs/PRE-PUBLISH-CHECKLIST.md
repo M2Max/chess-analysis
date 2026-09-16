@@ -28,8 +28,10 @@ vulnerabilities**. Nothing removed.
 - `SSL_KEY`/`SSL_CERT`: env, documented container defaults
 - `DIST`: derived from `import.meta.dir` (never absolute)
 - `VITE_API_BASE`: optional client override
-- No LAN IPs or user-specific paths in code (audited; `192.168.1.5` /
-  `maxito` occurrences in the published tree: **0**)
+- No LAN IPs or user-specific identifiers in the published tree - audit
+  before every sync with a placeholder-safe grep (private RFC1918 address +
+  the LAN Gitea account name). Do NOT embed the searched tokens themselves
+  in this file, or the audit tool becomes the leak.
 
 ### 4. Non-root Dockerfile user + healthchecks — DONE (verified)
 - Entrypoint chowns `/app/data` when started as root, then drops to the

@@ -8,3 +8,4 @@ public/openings.json
 .env
 node_modules/.tmp/
 data/
+public/opening-study.json
