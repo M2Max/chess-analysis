@@ -88,6 +88,47 @@ async function openReviewedGame(page, idx, pliesRight = 12) {
   await sleep(1200);
   await page.screenshot({ path: "images/puzzles-dark.png" });
   console.log("puzzles-dark done");
+
+  // 6b. openings study: seed some progress so the "In corso" section shows,
+  // capture the list, then a drill mid-line (2nd move of a 3-move variant)
+  await page.evaluate(async () => {
+    const post = (b) =>
+      fetch("/api/db/openings-progress", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "Mamox43", ...b }),
+      });
+    await post({ opening: "French Defense", variantIndex: 0 });
+    await post({ opening: "Alekhine Defense", variantIndex: 0 });
+    await post({ opening: "Alekhine Defense", variantIndex: 1 });
+  });
+  await page.click('button[aria-label="Studio aperture"]');
+  await sleep(900);
+  await page.screenshot({ path: "images/openings-dark.png" });
+  console.log("openings-dark done");
+
+  await page.click("text=Alekhine Defense");
+  await sleep(700);
+  await page.click('button[title="Krejcik Variation"]');
+  await sleep(400);
+  await page.click("#chessboard-square-e2", { force: true });
+  await sleep(250);
+  await page.click("#chessboard-square-e4", { force: true });
+  await sleep(700);
+  await page.screenshot({ path: "images/openings-drill-dark.png" });
+  console.log("openings-drill-dark done");
+
+  // leave the dev DB as we found it
+  await page.evaluate(async () => {
+    const reset = (opening) =>
+      fetch("/api/db/openings-progress/reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "Mamox43", opening }),
+      });
+    await reset("French Defense");
+    await reset("Alekhine Defense");
+  });
   await page.close();
 }
 

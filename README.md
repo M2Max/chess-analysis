@@ -14,16 +14,19 @@ on your device: per-move classification (`!!` `!` `?` `??` and friends),
 eval bar, advantage graph, top-3 engine lines (clickable), thinking time for
 every move, accuracy, and branching - drag any legal move off the mainline and
 it's evaluated immediately, with "Back to game" to return. Missed wins and
-mates are distilled into **tactics puzzles** validated by the engine. No
-server computation, no API keys.
+mates are distilled into **tactics puzzles** validated by the engine (up to 3
+correct moves in a row), and an **openings study** trains your repertoire by
+making you play the lines. No server computation, no API keys.
 
 | Players | Games |
 |---|---|
 | <img src="images/players-dark.png" width="480"> | <img src="images/list-dark.png" width="480"> |
 | **Review** | **Stats** |
 | <img src="images/review-dark.png" width="480"> | <img src="images/stats-dark.png" width="480"> |
-| **Puzzles** | **Light mode** |
-| <img src="images/puzzles-dark.png" width="480"> | <img src="images/review-light.png" width="480"> |
+| **Puzzles** | **Openings · study** |
+| <img src="images/puzzles-dark.png" width="480"> | <img src="images/openings-dark.png" width="480"> |
+| **Openings · drill** | **Light mode** |
+| <img src="images/openings-drill-dark.png" width="480"> | <img src="images/review-light.png" width="480"> |
 | **Review · mobile** | **Puzzle · mobile** |
 | <img src="images/mobile-review-dark.png" width="240"> | <img src="images/mobile-puzzles-dark.png" width="240"> |
 
@@ -42,23 +45,31 @@ server computation, no API keys.
 - 🔀 Branching: explore any off-mainline line, evaluated on the fly
 - ⏱️ Thinking time on every move, read from the chess.com clock data and
   shown next to each move (under it on mobile)
+- 🖱️ Tap-to-move on every board (destination dots) - or drag, as you prefer
 - 📈 Stats view: resumable 30-day full-analysis run; win-probability curves
   (Stockfish's own WDL model) with the decisive move marked, a loss autopsy
   where every row jumps straight to the move that decided the game, a
   mistake-cause donut (hanging pieces, forks, missed captures, time
   trouble), clock panel, phase split, conversion of won positions,
-  performance rating vs expected score, improvement trend, Elo trajectory
+  performance rating vs expected score, improvement trend, Elo trajectory -
+  long tables (openings, autopsy) collapse to a top-5 with a peek row
 - 🖱️ Every chart is interactive: exact values on hover, click to jump into
   the review at that move; engine best lines are clickable - tap a move to
   replay the line as an analysed branch
 - 🧩 Puzzles distilled from your own analysed games (missed wins, missed
   mates, punishment of your opponent's blunders) - engine-validated for a
-  unique sound solution, with difficulty tiers, a light-bulb hint (piece
-  highlight + 30s countdown, then the solution), wrong-move feedback and a
-  jump back to the source game; the hub tracks solved/unsolved and always
-  resumes where you left off
+  unique sound solution, **up to 3 correct moves in a row** when the line
+  stays forced (opponent replies auto-play), difficulty tiers, a light-bulb
+  hint (piece highlight + 30s countdown, then the solution), wrong-move
+  feedback and a jump back to the source game; the hub tracks solved/unsolved
+  and always resumes where you left off
 - 📖 Opening recognition (Lichess CC0 dataset, 3,810 openings) with book
   moves marked on the board and in the move list
+- 📚 Openings study: learn repertoire by playing it - main openings with
+  their variants (deep sub-lines folded into their parent), per-opening
+  progress cards + "Ongoing" section, play each line move by move with a
+  puzzle-style hint, a one-shot "Show" demo at 1 move/second, board flip,
+  and a Next button when you nail the variation
 - 🗄️ Server-side SQLite (bun:sqlite): games and analyses shared across all
   your devices; re-opening an analysed game is instant
 - 🌗 Dark + light themes · 🌐 Italiano (default) / English · 📱 mobile layout
@@ -70,7 +81,7 @@ server computation, no API keys.
 bun install          # postinstall fetches the Stockfish builds + opening index
 bun run dev          # frontend  -> http://localhost:5173
 bun server/index.ts  # data API + SQLite -> http://localhost:3000
-bun test             # 272 tests
+bun test             # 300 tests
 ```
 
 `?demo` loads the Opera Game (Morphy 1858) fully offline.
@@ -99,6 +110,7 @@ script, data backup): **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**
 | [docs/SECURITY-AUDIT.md](./docs/SECURITY-AUDIT.md) | Secret scan, hardening, residual risks |
 | [docs/STATS-ROADMAP.md](./docs/STATS-ROADMAP.md) | Stats metrics: research behind each one, what shipped, non-goals |
 | [docs/FEATURE-PUZZLES.md](./docs/FEATURE-PUZZLES.md) | Puzzles from your own games: selection + validation design |
+| [docs/FEATURE-OPENINGS.md](./docs/FEATURE-OPENINGS.md) | Openings study: study tree, frontier variants, progress |
 | [docs/PRE-PUBLISH-CHECKLIST.md](./docs/PRE-PUBLISH-CHECKLIST.md) | Final publish report |
 
 ## License
